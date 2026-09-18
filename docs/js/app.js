@@ -1,5 +1,5 @@
-import * as P from './pricing.js?v=4';
-import * as D from './data.js?v=4';
+import * as P from './pricing.js?v=5';
+import * as D from './data.js?v=5';
 
 const $ = (id) => document.getElementById(id);
 const state = { type: 'call', side: 'long', style: 'european', chain: null, chainExpiry: null, ticker: '', tab: 'overview', lsmc: null };
@@ -241,7 +241,7 @@ let guideLoaded = false;
 async function loadGuide() {
   if (guideLoaded) return;
   try {
-    const r = await fetch('./guide.html?v=4'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const r = await fetch('./guide.html?v=5'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
     $('guideText').innerHTML = await r.text(); guideLoaded = true;
   } catch (e) { $('guideText').innerHTML = `<p class="hint bad">Could not load the guide (${e.message}). It is also in the repository as GUIDE.md.</p>`; }
 }
@@ -581,9 +581,9 @@ function setTab(t) {
 
 // ---------------------------------------------------------------- UI helpers: toast, tooltips, presets, share, summary
 let toastTimer;
-function toast(msg) {
+function toast(msg, ms = 2600) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms);
 }
 function setSeg(k, v) {
   state[k] = v;
@@ -668,6 +668,28 @@ function renderSummary() {
   $('mbPrice').textContent = fmt(modelPrice(), 4);
   mb.hidden = false; // CSS shows the bar on small screens only
 }
+function initGlass() {
+  const root = document.documentElement, btn = $('glassToggle');
+  try { const v = localStorage.getItem('pricer.glass'); if (v === 'on' || v === 'off') root.dataset.glass = v; } catch { /* private mode */ }
+  const osReduced = () => window.matchMedia('(prefers-reduced-transparency: reduce)').matches;
+  const isOn = () => (root.dataset.glass ? root.dataset.glass === 'on' : !osReduced());
+  const paint = () => {
+    btn.setAttribute('aria-pressed', String(isOn()));
+    btn.title = isOn() ? 'Glass effects are on. Click to turn them off.' : 'Glass effects are off' + (osReduced() ? ' (your system reduces transparency)' : '') + '. Click to turn them on.';
+    btn.setAttribute('aria-label', btn.title);
+  };
+  btn.addEventListener('click', () => {
+    const next = isOn() ? 'off' : 'on'; root.dataset.glass = next;
+    try { localStorage.setItem('pricer.glass', next); } catch { /* ignore */ }
+    paint(); toast(`Glass effects ${next}`);
+  });
+  paint();
+  // one-time hint: the OS asks browsers to reduce transparency, so the glass starts off until the visitor opts in
+  let seen = false; try { seen = localStorage.getItem('pricer.glassHint') === '1'; } catch { /* ignore */ }
+  if (osReduced() && !root.dataset.glass && !seen) {
+    setTimeout(() => { toast('Your system reduces transparency, so glass effects start off. Tap the layers icon in the header to turn them on.', 7000); try { localStorage.setItem('pricer.glassHint', '1'); } catch { /* ignore */ } }, 1500);
+  }
+}
 function initWelcome(restored) {
   let dismissed = false;
   try { dismissed = localStorage.getItem('pricer.welcomeDismissed') === '1'; } catch { /* private mode */ }
@@ -741,6 +763,7 @@ function init() {
   $('mbInputs').addEventListener('click', () => $('inputsPanel').scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'start' }));
   $('mbResults').addEventListener('click', () => $('main').scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'start' }));
   initTooltips();
+  initGlass();
   const restored = restoreFromURL();
   initWelcome(restored);
   const hashTab = location.hash.replace('#', '');
