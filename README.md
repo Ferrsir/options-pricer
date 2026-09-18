@@ -96,4 +96,6 @@ tests/        22 tests: reference values, parity, Greeks vs finite differences, 
 docs/         the website (GitHub Pages)   ·   scripts/snapshot.py, build_guide.py   ·   METHODOLOGY.md, GUIDE.md
 ```
 
+**For AI agents (Claude Code, Codex) and contributors:** read [AGENTS.md](AGENTS.md) first. It has the rules, commands and a handoff log the agents use to talk to each other.
+
 *Educational project, not investment advice. Market data from Yahoo Finance via `yfinance`, which may be delayed or inaccurate.*
