@@ -99,6 +99,39 @@ Type any premium (per share) you want to test, or drag the slider.
 
 "Edge" is not a guarantee: it says the *model, at your σ*, thinks the price is off. If your σ is wrong, so is the edge. This is why the What-if tab and the implied vol matter.
 
+### Premium impact: what changes when the market price is not the model price
+
+This is the tab (and the "Your premium vs the model" card on Overview) for the question *"the model says 102 but it is really trading at 150: what does that change?"*
+
+**The key fact.** For everything else fixed (stock, strike, days, rate), an option's price rises with volatility and only with volatility. So if the market's price differs from your model's price, the market must be using a **different volatility**. The tool finds that volatility (the **implied vol**) and recomputes every Greek at it. Your premium changes the Greeks *through* the volatility it implies.
+
+**Worked example.** Stock 200, strike 100, 1 year, 5% rate, your vol 20% (a deep in-the-money call). The model price is **104.88**. Suppose the market asks **150**:
+
+| | Model (your σ = 20%) | Market (σ implied by 150) | Change |
+|---|---|---|---|
+| Volatility | 20.00% | **176.18%** | +156 pts |
+| Edge vs your premium (long) | −45.12 | 0.00 | |
+| Delta | 0.9999 | 0.9037 | −0.096 |
+| Gamma | 0.00001 | 0.00048 | up |
+| Vega (per vol pt) | 0.0005 | **0.3415** | up hundreds of times |
+| Theta (per day) | −0.0130 | −0.0866 | 7× more decay |
+| Rho (per 1%) | 0.951 | 0.307 | down |
+| P(finish ITM) | 100.0% | 32.3% | −68 pts |
+| Breakeven | 250.00 | 250.00 | **unchanged** |
+
+How to read it:
+
+* **Volatility:** 150 is only justifiable if the market expects a *wild* stock (176% a year). Ask yourself whether that is believable. If not, the option is expensive (or you have the inputs wrong: a wrong strike, wrong days, a dividend you forgot).
+* **Delta/gamma/vega/theta/rho changed** because at 20% vol a deep in-the-money option is basically the stock (delta 1, nothing sensitive to volatility), but at 176% vol it is a lottery ticket with a lot of time value, so it suddenly cares about volatility (vega) and bleeds time value (theta).
+* **Breakeven, max loss and max gain did not change**: they depend only on the premium you pay and the strike, not on any model. Paying 150 means you need the stock at 250 at expiry, whatever anyone's volatility says.
+* **Edge:** at your σ you'd overpay by 45. At the market's σ the "edge" is zero *by construction*. The decision is whether the market's σ is reasonable.
+
+**The six curves** below the table show the same idea continuously: the horizontal axis is the premium, and every point re-solves the implied vol and recomputes the Greeks at it. The white dashed line is the model price at your σ; the orange line is your premium. You can watch delta, gamma, vega, theta and P(profit) slide as the premium moves from cheap to expensive. (For extremely high premiums the implied vol explodes because the premium approaches its upper bound, the stock price itself; the charts stop before that.)
+
+**A more ordinary example.** Stock 100, strike 100, 1 year, 5%, your vol 20% (model 10.45). If the market is asking **14**, the implied vol is **29.4%**: delta 0.637 → 0.624, gamma 0.0188 → 0.0129, vega 0.375 → 0.379, theta −0.0176 → −0.0219 per day. The bigger the premium relative to the model, the more the whole risk profile shifts.
+
+**Lock σ to this premium's implied vol** (left panel) re-runs *every* tab at the market's volatility instead of yours, so the Greeks charts, payoff "today" curve and What-if tab all reflect the market's view.
+
 ### The five price cards
 
 | Card | Meaning |

@@ -104,6 +104,7 @@
 
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="overview" class="on">Overview</button>
+      <button role="tab" data-tab="impact">Premium impact</button>
       <button role="tab" data-tab="greeks">Greeks</button>
       <button role="tab" data-tab="payoff">Payoff</button>
       <button role="tab" data-tab="whatif">What-if</button>
@@ -126,9 +127,33 @@
           <span id="lsmcStatus" class="hint"></span>
         </div>
       </div>
+      <div class="card" id="impactCardOverview" hidden>
+        <h3>Your premium vs the model <span class="opt">what changes when the market price differs from the model price</span></h3>
+        <div id="impactTableOverview"></div>
+        <p class="row" style="margin-top:10px"><button class="btn" id="toImpact">See it across a range of premiums →</button></p>
+      </div>
       <div class="card">
         <h3>Greeks <span class="opt" id="greeksNote"></span></h3>
         <table id="greekTable" class="tbl"></table>
+      </div>
+    </div>
+
+    <div class="tabpane" id="tab-impact">
+      <div class="card" id="impactEmpty" hidden>
+        <h3>Enter a premium to see its impact</h3>
+        <p class="hint">Type a premium in the <b>Your premium</b> box on the left (for example a price far above what the model says). Everything here compares <b>your model’s volatility</b> with the <b>volatility your premium implies</b>.</p>
+      </div>
+      <div id="impactBody">
+        <div class="card">
+          <h3>Model vs market</h3>
+          <div id="impactTable"></div>
+          <div id="impactNotes" class="prose" style="margin-top:12px"></div>
+        </div>
+        <div class="card">
+          <h3>How each number reacts as the premium changes</h3>
+          <p class="hint" style="margin-top:-6px">Every point on these curves re-solves the implied vol for that premium and recomputes the Greeks at it (Black-Scholes). The <span style="color:#cbd2dc">white dashed line</span> is the model price at your σ; the <span style="color:#f5a623">orange line</span> is your premium.</p>
+          <div id="impactGrid" class="greekgrid"></div>
+        </div>
       </div>
     </div>
 

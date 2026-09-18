@@ -4,7 +4,7 @@ import * as D from './data.js';
 const $ = (id) => document.getElementById(id);
 const state = { type: 'call', side: 'long', style: 'european', chain: null, chainExpiry: null, ticker: '', tab: 'overview', lsmc: null };
 const COLORS = ['#f5a623', '#a9cf3f', '#3fae78', '#4aa3df', '#c77dff'];
-const fmt = (x, d = 4) => (Number.isFinite(x) ? x.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—');
+const fmt = (x, d = 4) => (Number.isFinite(x) ? (Math.abs(x) < 0.5 * 10 ** -d ? 0 : x).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—'); // no '-0.0000'
 const pct = (x, d = 2) => (Number.isFinite(x) ? (x * 100).toFixed(d) + '%' : '—');
 const sgn = () => (state.side === 'long' ? 1 : -1);
 
@@ -88,6 +88,9 @@ function renderOverview() {
   $('modelTable').innerHTML = `<tr><th>Model</th><th class="num">Premium</th><th>Note</th></tr>` +
     rows.map(([n, v, why]) => `<tr><td>${n}</td><td class="num">${fmt(v, 4)}</td><td class="why">${why}</td></tr>`).join('');
 
+  const tbl = impactTableHTML();
+  $('impactCardOverview').hidden = !tbl;
+  $('impactTableOverview').innerHTML = tbl;
   const s = sgn();
   const desc = {
     delta: ['Delta Δ', 'Change in premium per $1 move in spot. Also the hedge ratio and roughly P(ITM).', 1],
@@ -353,10 +356,10 @@ function syncSlider() {
   sl.value = Number.isFinite(prem) ? prem : modelPrice();
   sl.style.opacity = Number.isFinite(prem) ? 1 : 0.45;
 }
-function probProfit(p, prem) {
+function probProfit(p, prem, sigma = p.sigma) {
   const be = p.kind === 'call' ? p.K + prem : p.K - prem;
   if (be <= 0) return { be, pr: sgn() === 1 ? 0 : 1 };
-  const [, d2] = P.d1d2(p.S, be, p.T, p.r, p.sigma, p.q);
+  const [, d2] = P.d1d2(p.S, be, p.T, p.r, sigma, p.q);
   const pr = p.kind === 'call' ? P.N(d2) : P.N(-d2);
   return { be, pr: sgn() === 1 ? pr : 1 - pr };
 }
@@ -378,8 +381,90 @@ function renderBanner() {
     ['', 'P(profit)', pct(pr, 1), 'at expiry, risk-neutral', ''],
     ['', 'Max loss / gain', `${maxLoss} / ${maxGain}`, 'per share', ''],
   ];
+  cells.push(['lead', 'Greeks at this premium', `<button class="chip" id="toImpact2">See how they change →</button>`, 'Greeks are re-evaluated at the volatility your premium implies', '']);
   box.hidden = false;
   box.innerHTML = cells.map(([cls, k, v, sub, tone]) => `<div class="cell ${cls}"><div class="k">${k}</div><div class="v ${tone}">${v}</div><div class="s">${sub}</div></div>`).join('');
+  const jump = $('toImpact2'); if (jump) jump.onclick = () => setTab('impact');
+}
+
+
+// ---------------------------------------------------------------- premium impact: model sigma vs market-implied sigma
+function snapshotAt(p, sigma, prem) {
+  const s = sgn();
+  let price, g;
+  try {
+    // same 200 steps as the implied-vol solver, so the market column reproduces your premium
+    if (p.style === 'american') { const a = P.americanGreeks(p.S, p.K, p.T, p.r, sigma, p.q, p.kind, 200); price = a.price; g = a; }
+  } catch { /* tree invalid at this vol: fall through to BSM */ }
+  if (!g) { price = P.bsmPrice(p.S, p.K, p.T, p.r, sigma, p.q, p.kind); g = P.bsmGreeks(p.S, p.K, p.T, p.r, sigma, p.q, p.kind); }
+  const [, d2] = P.d1d2(p.S, p.K, p.T, p.r, sigma, p.q);
+  return {
+    sigma, price, edge: s * (price - prem),
+    delta: s * g.delta, gamma: s * g.gamma, vega: s * g.vega * 0.01, theta: s * g.theta / 365, rho: s * g.rho * 0.01,
+    itm: p.kind === 'call' ? P.N(d2) : P.N(-d2), pprofit: probProfit(p, prem, sigma).pr,
+  };
+}
+function impactTableHTML() {
+  const c = cache, prem = getPremium(), iv = state.iv;
+  if (!c || !Number.isFinite(prem) || !(prem > 0)) return '';
+  const { p } = c;
+  if (!Number.isFinite(iv)) return '<p class="hint bad">No volatility reproduces this premium (outside the no-arbitrage bounds), so there is nothing to compare.</p>';
+  const locked = $('lockIv').checked;
+  const a = snapshotAt(p, locked ? iv : p.sigma, prem), b = snapshotAt(p, iv, prem);
+  const rows = [
+    ['Volatility σ', pct(a.sigma, 2), pct(b.sigma, 2), `${b.sigma >= a.sigma ? '+' : '−'}${Math.abs((b.sigma - a.sigma) * 100).toFixed(2)} pts`],
+    ['Model price at that σ', fmt(a.price, 4), fmt(b.price, 4), fmt(b.price - a.price, 4)],
+    ['Edge vs your premium', fmt(a.edge, 4), fmt(b.edge, 4), fmt(b.edge - a.edge, 4)],
+    ['Delta', fmt(a.delta, 4), fmt(b.delta, 4), fmt(b.delta - a.delta, 4)],
+    ['Gamma', fmt(a.gamma, 5), fmt(b.gamma, 5), fmt(b.gamma - a.gamma, 5)],
+    ['Vega (per vol pt)', fmt(a.vega, 4), fmt(b.vega, 4), fmt(b.vega - a.vega, 4)],
+    ['Theta (per day)', fmt(a.theta, 4), fmt(b.theta, 4), fmt(b.theta - a.theta, 4)],
+    ['Rho (per 1%)', fmt(a.rho, 4), fmt(b.rho, 4), fmt(b.rho - a.rho, 4)],
+    ['P(finish ITM)', pct(a.itm, 1), pct(b.itm, 1), `${b.itm >= a.itm ? '+' : '−'}${Math.abs((b.itm - a.itm) * 100).toFixed(1)} pts`],
+    ['P(profit) at your premium', pct(a.pprofit, 1), pct(b.pprofit, 1), `${b.pprofit >= a.pprofit ? '+' : '−'}${Math.abs((b.pprofit - a.pprofit) * 100).toFixed(1)} pts`],
+  ];
+  const be = probProfit(p, prem).be;
+  state.impactRows = { a, b };
+  return `<table class="tbl"><tr><th></th><th class="num">Model (your σ)</th><th class="num">Market (σ implied by ${fmt(prem, 2)})</th><th class="num">Change</th></tr>` +
+    rows.map(([k, x, y, d]) => `<tr><td>${k}</td><td class="num">${x}</td><td class="num">${y}</td><td class="num">${d}</td></tr>`).join('') +
+    `<tr><td>Breakeven at expiry</td><td class="num" colspan="2" style="text-align:center">${fmt(be, 2)} (depends only on your premium)</td><td></td></tr></table>`;
+}
+function impactNotesHTML() {
+  const { a, b } = state.impactRows || {}; if (!a) return '';
+  const dir = b.sigma > a.sigma ? 'higher' : 'lower';
+  const items = [
+    `<li><b>Why the numbers move.</b> An option’s price rises with volatility and with nothing else you can vary here, so a premium different from the model price can only be explained by a <b>${dir} volatility</b>: <b>${pct(b.sigma, 1)}</b> instead of ${pct(a.sigma, 1)}. Every Greek is then re-evaluated at that volatility.</li>`,
+    `<li><b>Delta</b> goes from ${fmt(a.delta, 3)} to ${fmt(b.delta, 3)}, <b>gamma</b> from ${fmt(a.gamma, 4)} to ${fmt(b.gamma, 4)}, <b>vega</b> from ${fmt(a.vega, 3)} to ${fmt(b.vega, 3)}, <b>theta</b> from ${fmt(a.theta, 3)} to ${fmt(b.theta, 3)} per day.</li>`,
+    `<li><b>What did <i>not</i> change:</b> your breakeven, max loss and max gain. Those depend only on the premium and strike, not on any model.</li>`,
+    `<li><b>Read the edge column carefully.</b> At your σ the model says your side ${a.edge >= 0 ? 'gains' : 'loses'} ${fmt(Math.abs(a.edge), 3)} per share by transacting at this premium. At the market’s σ the edge is ${fmt(b.edge, 3)}, i.e. zero by construction. The real question is whether ${pct(b.sigma, 1)} volatility is believable for this contract.</li>`,
+  ];
+  return `<ul>${items.join('')}</ul>`;
+}
+const IMPACT_CHARTS = [['iv', 'Implied volatility'], ['delta', 'Delta'], ['gamma', 'Gamma'], ['vega', 'Vega (per vol pt)'], ['theta', 'Theta (per day)'], ['pp', 'P(profit)']];
+function renderImpact() {
+  const c = cache; if (!c) return; const { p } = c;
+  const prem = getPremium(), has = Number.isFinite(prem) && prem > 0;
+  $('impactEmpty').hidden = has; $('impactBody').hidden = !has;
+  if (!has) return;
+  $('impactTable').innerHTML = impactTableHTML();
+  $('impactNotes').innerHTML = impactNotesHTML();
+  const s = sgn(), model = P.bsmPrice(p.S, p.K, p.T, p.r, p.sigma, p.q, p.kind);
+  const [lo, hi] = P.noArbBounds(p.S, p.K, p.T, p.r, p.q, p.kind);
+  const xLo = Math.max(lo + 0.002 * (hi - lo), Math.min(0.2 * model, prem * 0.8)), xHi = Math.min(hi - 0.002 * (hi - lo), Math.max(3 * model, prem * 1.3));
+  const xs = linspace(xLo, xHi, 60);
+  const pts = xs.map((x) => {
+    const iv = P.impliedVol(x, p.S, p.K, p.T, p.r, p.q, p.kind);
+    if (!Number.isFinite(iv)) return null;
+    const g = P.bsmGreeks(p.S, p.K, p.T, p.r, iv, p.q, p.kind);
+    return { x, iv: iv * 100, delta: s * g.delta, gamma: s * g.gamma, vega: s * g.vega * 0.01, theta: s * g.theta / 365, pp: probProfit(p, x, iv).pr * 100 };
+  }).filter((q) => q && q.iv <= Math.max(300, 130 * (state.iv || 0)));  // keep the y-axes readable when the premium approaches its upper bound
+  const grid = $('impactGrid');
+  if (!grid.children.length) IMPACT_CHARTS.forEach(([k]) => { const d = document.createElement('div'); d.className = 'g'; d.id = 'imp-' + k; grid.appendChild(d); });
+  IMPACT_CHARTS.forEach(([k, label], i) => {
+    const line = (x, color, dash) => ({ type: 'line', x0: x, x1: x, yref: 'paper', y0: 0, y1: 1, line: { color, dash, width: 1.4 } });
+    draw('imp-' + k, [{ x: pts.map((q) => q.x), y: pts.map((q) => q[k]), mode: 'lines', line: { color: COLORS[i % COLORS.length], width: 2.4 }, showlegend: false, hovertemplate: `premium %{x:.3f}<br>${label} %{y:.4f}<extra></extra>` }],
+      baseLayout({ title: { text: label, font: { size: 13 } }, margin: { l: 50, r: 8, t: 30, b: 40 }, xaxis: { title: { text: 'Premium', font: { size: 11 } }, gridcolor: '#252c36' }, yaxis: { gridcolor: '#252c36' }, shapes: [line(model, '#cbd2dc', 'dash'), line(prem, '#f5a623', 'solid')] }));
+  });
 }
 
 // ---------------------------------------------------------------- what-if tab
@@ -460,7 +545,7 @@ function update() {
 }
 function renderCurrentTab() {
   if (!cache) return;
-  ({ overview: renderOverview, greeks: renderGreeks, payoff: renderPayoff, whatif: renderWhatIf, tree: renderTree, checks: renderChecks, surface: () => {}, how: () => {}, guide: () => {} }[state.tab])();
+  ({ overview: renderOverview, greeks: renderGreeks, payoff: renderPayoff, whatif: renderWhatIf, impact: renderImpact, tree: renderTree, checks: renderChecks, surface: () => {}, how: () => {}, guide: () => {} }[state.tab])();
 }
 function setTab(t) {
   state.tab = t;
@@ -516,11 +601,12 @@ function init() {
       $('runLsmc').disabled = false; renderOverview();
     }, 30);
   });
+  $('toImpact').addEventListener('click', () => setTab('impact'));
   $('guideLink').addEventListener('click', (e) => { e.preventDefault(); setTab('guide'); });
   const hashTab = location.hash.replace('#', '');
   refreshPill();
   update();
-  if (['overview', 'greeks', 'payoff', 'whatif', 'tree', 'surface', 'checks', 'guide', 'how'].includes(hashTab)) setTab(hashTab);
+  if (['overview', 'impact', 'greeks', 'payoff', 'whatif', 'tree', 'surface', 'checks', 'guide', 'how'].includes(hashTab)) setTab(hashTab);
 }
 
 async function refreshPill() {

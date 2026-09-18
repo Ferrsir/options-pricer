@@ -166,3 +166,7 @@ label.inline select { width: auto; margin: 0; }
 .prose strong { color: var(--text); }
 .top-links a#guideLink { font-size: 13px; }
 @media (max-width: 700px) { .top-links a#guideLink { display: none; } }
+
+#impactNotes ul { margin: 0; }
+#impactNotes li { margin: 6px 0; }
+#impactTableOverview .tbl td, #impactTable .tbl td { padding: 6px 8px; }
