@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 dependencies = ["numpy", "scipy", "matplotlib", "pandas", "yfinance"]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "markdown"]
 
 [project.scripts]
 pricer = "pricer.cli:main"

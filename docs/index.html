@@ -20,6 +20,7 @@
   </div>
   <div class="top-links">
     <span class="pill" id="dataPill" title="Where market data comes from">data: checking…</span>
+    <a href="#guide" id="guideLink">New here? Read the guide</a>
     <a href="https://github.com/Ferrsir/options-pricer" target="_blank" rel="noopener">GitHub</a>
   </div>
 </header>
@@ -67,11 +68,21 @@
       </label>
     </section>
 
-    <section>
-      <h2>Market premium <span class="opt">optional</span></h2>
+    <section id="premSection">
+      <h2>Your premium <span class="opt">per share, what you pay or collect</span></h2>
       <div class="row">
-        <input id="premium" type="number" step="any" placeholder="Observed price → implied vol" aria-label="Market premium">
+        <input id="premium" type="number" step="any" min="0" placeholder="Type a premium to test…" aria-label="Your premium per share">
       </div>
+      <input id="premSlider" class="premslide" type="range" min="0" max="10" step="0.01" value="0" aria-label="Drag to change the premium">
+      <div class="chips" id="premChips">
+        <button class="chip" data-p="model" title="Set the premium to the model price at your σ">= model</button>
+        <button class="chip" data-p="-0.25">−25%</button>
+        <button class="chip" data-p="-0.1">−10%</button>
+        <button class="chip" data-p="0.1">+10%</button>
+        <button class="chip" data-p="0.25">+25%</button>
+        <button class="chip" data-p="clear">clear</button>
+      </div>
+      <label class="checkline"><input type="checkbox" id="lockIv"> Lock σ to this premium’s implied vol</label>
       <div id="ivReadout" class="ivbox" hidden></div>
     </section>
 
@@ -88,15 +99,18 @@
   <section class="content">
     <div id="error" class="error" role="alert" hidden></div>
 
+    <div id="premBanner" class="banner" hidden></div>
     <div class="hero" id="hero"></div>
 
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="overview" class="on">Overview</button>
       <button role="tab" data-tab="greeks">Greeks</button>
       <button role="tab" data-tab="payoff">Payoff</button>
+      <button role="tab" data-tab="whatif">What-if</button>
       <button role="tab" data-tab="tree">Tree &amp; LSMC</button>
       <button role="tab" data-tab="surface">Vol surface</button>
       <button role="tab" data-tab="checks">Sanity checks</button>
+      <button role="tab" data-tab="guide">Guide</button>
       <button role="tab" data-tab="how">How it works</button>
     </nav>
 
@@ -146,6 +160,26 @@
       </div>
     </div>
 
+    <div class="tabpane" id="tab-whatif">
+      <div class="card">
+        <h3>What happens to your position?</h3>
+        <p class="hint" style="margin-top:-6px">You entered at your premium. Move the sliders to see the option’s value and your profit or loss after spot, volatility and time change.</p>
+        <div class="wi-controls">
+          <label>Spot move <output id="wiSpotOut">0%</output><input id="wiSpot" type="range" min="-30" max="30" step="0.5" value="0"></label>
+          <label>Volatility change <output id="wiVolOut">0 pts</output><input id="wiVol" type="range" min="-20" max="20" step="0.5" value="0"></label>
+          <label>Days passed <output id="wiDaysOut">0</output><input id="wiDays" type="range" min="0" max="365" step="1" value="0"></label>
+        </div>
+        <div id="wiStats" class="hero wi-stats"></div>
+      </div>
+      <div class="card"><h3>Where the P&amp;L comes from</h3><div id="wiWaterfall" class="plot"></div>
+        <p class="hint">Edge at entry = model value − your premium (from your side). Then the Greeks explain the move: Δ·ΔS, ½Γ·ΔS², vega·Δσ, Θ·Δt. “Other” is the higher-order remainder.</p></div>
+      <div class="card">
+        <div class="row wrap"><h3 style="margin:0">P&amp;L heat map</h3>
+          <label class="inline">Vertical axis <select id="wiHeat"><option value="days">Days passed</option><option value="vol">Volatility change</option></select></label></div>
+        <div id="wiHeatmap" class="plot tall"></div>
+        <p class="hint">Green = profit, red = loss, per share, valued with Black-Scholes. The dotted vertical line is where you are now.</p></div>
+    </div>
+
     <div class="tabpane" id="tab-tree">
       <div class="card"><h3>Convergence to Black-Scholes-Merton</h3><div id="convPlot" class="plot"></div>
         <p class="hint">European tree error shrinks roughly like 1/steps (with a saw-tooth from how the strike sits on the lattice). The American curve sits above it by the early-exercise premium.</p></div>
@@ -175,6 +209,10 @@
       <div class="card"><h3>HW 1 sanity checks</h3>
         <p class="hint">From the slide: “If one fails, stop and find out why.” These run live against your current inputs.</p>
         <div id="checkList"></div></div>
+    </div>
+
+    <div class="tabpane" id="tab-guide">
+      <div class="card prose" id="guideText"><p class="hint">Loading guide…</p></div>
     </div>
 
     <div class="tabpane" id="tab-how">

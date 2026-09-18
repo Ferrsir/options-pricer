@@ -126,6 +126,8 @@ def american_implied_vol(price, S, K, T, r, q=0.0, kind="call", steps=300, lo=1e
     from scipy.optimize import brentq
 
     f = lambda s: american_price(S, K, T, r, s, q, kind, steps) - price
+    # the tree needs sigma > |r-q| sqrt(dt) (no-arbitrage d < e^{(r-q)dt} < u): start the search just above that
+    lo = max(lo, 1.05 * abs(r - q) * (T / steps) ** 0.5)
     try:
         if f(lo) > 0 or f(hi) < 0:
             return float("nan")

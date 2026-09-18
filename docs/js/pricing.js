@@ -132,13 +132,16 @@ export function americanGreeks(S, K, T, r, sigma, q, kind, steps) {
 }
 
 export function americanImpliedVol(price, S, K, T, r, q, kind, steps = 200) {
-  let a = 1e-3, b = 5;
-  if (americanPrice(S, K, T, r, a, q, kind, steps) > price || americanPrice(S, K, T, r, b, q, kind, steps) < price) return NaN;
-  for (let i = 0; i < 60; i++) {
-    const m = 0.5 * (a + b);
-    if (americanPrice(S, K, T, r, m, q, kind, steps) > price) b = m; else a = m;
-    if (b - a < 1e-7) break;
-  }
+  // The tree is only valid when d < e^{(r-q)dt} < u, i.e. sigma > |r-q|*sqrt(dt). Start the search just above that.
+  let a = Math.max(1e-3, 1.05 * Math.abs(r - q) * Math.sqrt(T / steps)), b = 5;
+  try {
+    if (americanPrice(S, K, T, r, a, q, kind, steps) > price || americanPrice(S, K, T, r, b, q, kind, steps) < price) return NaN;
+    for (let i = 0; i < 60; i++) {
+      const m = 0.5 * (a + b);
+      if (americanPrice(S, K, T, r, m, q, kind, steps) > price) b = m; else a = m;
+      if (b - a < 1e-7) break;
+    }
+  } catch { return NaN; }
   return 0.5 * (a + b);
 }
 

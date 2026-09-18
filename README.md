@@ -14,11 +14,13 @@
 | American options pricer (CRR tree, exercise-vs-continue at each node) | [`src/pricer/binomial.py`](src/pricer/binomial.py) |
 | LSMC (regression on basis functions, compare to the tree) | [`src/pricer/lsmc.py`](src/pricer/lsmc.py) |
 | Greeks + visualizations (stretch) | `bsm_greeks`, [`viz.py`](src/pricer/viz.py), *Greeks* tab on the site |
-| Slide sanity checks | [`checks.py`](src/pricer/checks.py), 21 tests in [`tests/`](tests/test_pricer.py) |
-| Implied vol from a market premium | `implied_vol`, *Market premium* box on the site |
+| Slide sanity checks | [`checks.py`](src/pricer/checks.py), 22 tests in [`tests/`](tests/test_pricer.py) |
+| Implied vol from a market premium | `implied_vol`, *Your premium* box on the site |
 | Vol-surface picture from Yahoo Finance | `python -m pricer surface NDX` |
 | Ticker → Yahoo data | [`data.py`](src/pricer/data.py) + site |
 | How every number is derived | **[METHODOLOGY.md](METHODOLOGY.md)** |
+| Plain-English explanation of every term, number and graph | **[GUIDE.md](GUIDE.md)** (also the *Guide* tab on the site) |
+| Type your own premium and see what happens | *Your premium* box, banner and *What-if* tab on the site |
 
 ## Quick start
 
@@ -26,7 +28,7 @@
 git clone https://github.com/Ferrsir/options-pricer && cd options-pricer
 python -m venv .venv && .venv\Scripts\activate      # macOS/Linux: source .venv/bin/activate
 pip install -e ".[dev]"
-python -m pytest -q                                   # 21 tests
+python -m pytest -q                                   # 22 tests
 ```
 
 ### Price an option
@@ -76,7 +78,8 @@ python -m pricer serve          # http://localhost:8000
 `docs/` is a static site (plain JS + Plotly, no build step) served by GitHub Pages. The pricing engine is re-implemented in JavaScript and agrees with Python to ~1e-12.
 
 * Inputs for S, K, expiry, σ, r, q; call/put, long/short, European/American
-* Enter a **market premium** to solve the implied vol
+* Type or drag a **premium**: edge vs the model, implied vol, breakeven, P(profit), max gain/loss; optionally lock σ to that premium's implied vol
+* **What-if** tab: move spot, volatility and days and see your P&L, a Greek waterfall of where it came from, and a P&L heat map
 * Overview (BSM / European tree / American tree / LSMC), Greeks (charts vs spot, time, vol and a 3-D Greek surface), payoff diagram, tree convergence and early-exercise boundary, interactive 3-D vol surface, live sanity checks, and the derivation
 
 **Ticker data.** Yahoo Finance sends no CORS headers, so a static page cannot call it directly. The site therefore uses:
@@ -88,8 +91,8 @@ python -m pricer serve          # http://localhost:8000
 
 ```
 src/pricer/   bsm.py  binomial.py  lsmc.py  surface.py  data.py  viz.py  checks.py  cli.py  server.py
-tests/        21 tests: reference values, parity, Greeks vs finite differences, tree convergence, LSMC, surface recovery
-docs/         the website (GitHub Pages)   ·   scripts/snapshot.py   ·   METHODOLOGY.md
+tests/        22 tests: reference values, parity, Greeks vs finite differences, tree convergence, LSMC, surface recovery
+docs/         the website (GitHub Pages)   ·   scripts/snapshot.py, build_guide.py   ·   METHODOLOGY.md, GUIDE.md
 ```
 
 *Educational project, not investment advice. Market data from Yahoo Finance via `yfinance`, which may be delayed or inaccurate.*

@@ -83,7 +83,7 @@ function renderOverview() {
   if (state.lsmc) rows.push([`American LSMC (${state.lsmc.paths.toLocaleString()} paths)`, state.lsmc.price, `± ${(1.96 * state.lsmc.se).toFixed(4)} (95%); biased slightly low`]);
   if (Number.isFinite(mkt)) {
     const model = p.style === 'american' ? c.am.price : c.bsm;
-    rows.push(['Market premium (yours)', mkt, `model − market = ${(model - mkt >= 0 ? '+' : '') + (model - mkt).toFixed(4)} at σ=${pct(p.sigma, 1)}`]);
+    rows.push(['Your premium', mkt, `model − premium = ${(model - mkt >= 0 ? '+' : '') + (model - mkt).toFixed(4)} at σ=${pct(p.sigma, 1)}`]);
   }
   $('modelTable').innerHTML = `<tr><th>Model</th><th class="num">Premium</th><th>Note</th></tr>` +
     rows.map(([n, v, why]) => `<tr><td>${n}</td><td class="num">${fmt(v, 4)}</td><td class="why">${why}</td></tr>`).join('');
@@ -229,6 +229,16 @@ Put  = K·e^(−rT)·N(−d2) − S·e^(−qT)·N(−d1)</div>
 <p>Desks quote in volatility, not dollars: implied vol is the σ that makes BSM reproduce the market premium (solved by bisection; BSM price is strictly increasing in σ). Doing this for every strike and expiry gives the surface. Since Black Monday the surface has a skew, with out-of-the-money puts trading at higher vols than BSM's flat-vol assumption allows.</p>
 <p>Full derivations and design choices are in <a href="https://github.com/Ferrsir/options-pricer/blob/main/METHODOLOGY.md" target="_blank" rel="noopener">METHODOLOGY.md</a>.</p>`;
 
+// ---------------------------------------------------------------- guide tab (rendered from GUIDE.md by scripts/build_guide.py)
+let guideLoaded = false;
+async function loadGuide() {
+  if (guideLoaded) return;
+  try {
+    const r = await fetch('./guide.html'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    $('guideText').innerHTML = await r.text(); guideLoaded = true;
+  } catch (e) { $('guideText').innerHTML = `<p class="hint bad">Could not load the guide (${e.message}). It is also in the repository as GUIDE.md.</p>`; }
+}
+
 // ---------------------------------------------------------------- vol surface tab
 async function loadSurface() {
   const t = ($('surfTicker').value || 'NDX').trim();
@@ -305,19 +315,136 @@ function pickStrike() {
   update();
 }
 
-// ---------------------------------------------------------------- implied vol from a premium
-let ivTimer;
-function updateIV() {
-  clearTimeout(ivTimer);
-  ivTimer = setTimeout(() => {
-    const box = $('ivReadout'), prem = parseFloat($('premium').value), p = readInputs();
-    if (!Number.isFinite(prem) || validate(p)) { box.hidden = true; return; }
-    const iv = p.style === 'american' ? P.americanImpliedVol(prem, p.S, p.K, p.T, p.r, p.q, p.kind, 200) : P.impliedVol(prem, p.S, p.K, p.T, p.r, p.q, p.kind);
-    box.hidden = false;
-    if (!Number.isFinite(iv)) { box.innerHTML = 'No volatility reproduces this premium (it violates no-arbitrage bounds).'; return; }
-    box.innerHTML = `Implied vol (${p.style}): <b>${(iv * 100).toFixed(2)}%</b> <button class="chip" id="useIv">use as σ</button><br><span class="hint">vs. your σ ${(p.sigma * 100).toFixed(1)}% → ${iv > p.sigma ? 'market is pricing more vol than your input' : 'market is pricing less vol than your input'}</span>`;
-    $('useIv').onclick = () => { $('sigma').value = +(iv * 100).toFixed(3); update(); };
-  }, 250);
+// ---------------------------------------------------------------- your premium: implied vol, edge, banner
+const getPremium = () => { const v = parseFloat($('premium').value); return Number.isFinite(v) && v >= 0 ? v : NaN; };
+const modelPrice = () => (cache ? (cache.p.style === 'american' ? cache.am.price : cache.bsm) : NaN);
+const paidPremium = () => { const m = getPremium(); return Number.isFinite(m) ? m : modelPrice(); };
+
+function computeIV() {
+  const prem = getPremium(), p = readInputs();
+  state.iv = NaN;
+  if (!(prem > 0) || validate(p)) return NaN;
+  state.iv = p.style === 'american' ? P.americanImpliedVol(prem, p.S, p.K, p.T, p.r, p.q, p.kind, 200) : P.impliedVol(prem, p.S, p.K, p.T, p.r, p.q, p.kind);
+  return state.iv;
+}
+function syncLockedSigma() {
+  const lock = $('lockIv').checked;
+  $('sigma').readOnly = lock;
+  $('sigma').title = lock ? 'Locked to the implied vol of your premium (untick the box to edit)' : '';
+  const iv = computeIV();
+  if (lock && Number.isFinite(iv)) $('sigma').value = +(iv * 100).toFixed(4);
+}
+function renderIvBox() {
+  const box = $('ivReadout'), prem = getPremium(), p = readInputs(), iv = state.iv, lock = $('lockIv').checked;
+  if (!Number.isFinite(prem) || validate(p)) { box.hidden = true; return; }
+  box.hidden = false;
+  if (!(prem > 0)) { box.textContent = 'Enter a premium above 0.'; return; }
+  if (!Number.isFinite(iv)) { box.textContent = 'No volatility reproduces this premium: it is outside the no-arbitrage bounds (below intrinsic/forward value or above the underlying).'; return; }
+  box.innerHTML = `Implied vol (${p.style}): <b>${(iv * 100).toFixed(2)}%</b> ${lock ? '<span class="hint">· σ locked</span>' : '<button class="chip" id="useIv">use as σ</button>'}` +
+    (lock ? '' : `<br><span class="hint">vs your σ ${(p.sigma * 100).toFixed(1)}% → ${iv > p.sigma ? 'this premium prices in MORE vol than your input' : 'this premium prices in LESS vol than your input'}</span>`);
+  if (!lock) $('useIv').onclick = () => { $('sigma').value = +(iv * 100).toFixed(3); update(); };
+}
+function syncSlider() {
+  const sl = $('premSlider'), prem = getPremium();
+  if (!cache) return;
+  const { p } = cache, ref = P.bsmPrice(p.S, p.K, p.T, p.r, 0.5, p.q, p.kind); // range independent of sigma and premium, so dragging is stable
+  const max = Math.max(0.05, ref, Number.isFinite(prem) ? prem * 1.25 : 0);
+  sl.max = max.toFixed(4); sl.step = (max / 500).toFixed(5);
+  sl.value = Number.isFinite(prem) ? prem : modelPrice();
+  sl.style.opacity = Number.isFinite(prem) ? 1 : 0.45;
+}
+function probProfit(p, prem) {
+  const be = p.kind === 'call' ? p.K + prem : p.K - prem;
+  if (be <= 0) return { be, pr: sgn() === 1 ? 0 : 1 };
+  const [, d2] = P.d1d2(p.S, be, p.T, p.r, p.sigma, p.q);
+  const pr = p.kind === 'call' ? P.N(d2) : P.N(-d2);
+  return { be, pr: sgn() === 1 ? pr : 1 - pr };
+}
+function renderBanner() {
+  const box = $('premBanner'), prem = getPremium(), c = cache;
+  if (!c || !Number.isFinite(prem)) { box.hidden = true; return; }
+  const { p } = c, s = sgn(), model = modelPrice();
+  const edge = s * (model - prem), edgePct = model > 0 ? edge / model : NaN;
+  const verdict = Math.abs(edgePct) < 0.02 ? ['fair vs model', ''] : edge > 0 ? [s === 1 ? 'cheap vs model' : 'rich premium vs model', 'good'] : [s === 1 ? 'rich vs model' : 'thin premium vs model', 'bad'];
+  const { be, pr } = probProfit(p, prem);
+  const maxLoss = s === 1 ? fmt(prem, 2) : (p.kind === 'call' ? 'unbounded' : fmt(Math.max(p.K - prem, 0), 2));
+  const maxGain = s === 1 ? (p.kind === 'call' ? 'unbounded' : fmt(Math.max(p.K - prem, 0), 2)) : fmt(prem, 2);
+  const iv = state.iv;
+  const cells = [
+    ['lead', 'Your premium', fmt(prem, 4), `$${(prem * 100).toLocaleString('en-US', { maximumFractionDigits: 0 })} per contract · you ${s === 1 ? 'pay' : 'collect'}`, ''],
+    ['', 'Edge vs model', `${edge >= 0 ? '+' : '−'}${fmt(Math.abs(edge), 4)}`, `${Number.isFinite(edgePct) ? (edgePct >= 0 ? '+' : '−') + Math.abs(edgePct * 100).toFixed(1) + '% · ' : ''}${verdict[0]} (σ ${pct(p.sigma, 1)})`, verdict[1]],
+    ['', 'Implied vol', Number.isFinite(iv) ? pct(iv, 2) : '—', Number.isFinite(iv) ? `vs σ input ${pct(p.sigma, 1)}` : 'no vol fits this premium', ''],
+    ['', 'Breakeven', fmt(be, 2), `${pct((be - p.S) / p.S, 1)} from spot at expiry`, ''],
+    ['', 'P(profit)', pct(pr, 1), 'at expiry, risk-neutral', ''],
+    ['', 'Max loss / gain', `${maxLoss} / ${maxGain}`, 'per share', ''],
+  ];
+  box.hidden = false;
+  box.innerHTML = cells.map(([cls, k, v, sub, tone]) => `<div class="cell ${cls}"><div class="k">${k}</div><div class="v ${tone}">${v}</div><div class="s">${sub}</div></div>`).join('');
+}
+
+// ---------------------------------------------------------------- what-if tab
+function valueAt(p, S, T, sigma) {
+  if (T <= 1e-9) return P.intrinsic(S, p.K, p.kind);
+  if (p.style === 'american') {
+    try { return P.americanPrice(S, p.K, T, p.r, sigma, p.q, p.kind, Math.min(p.steps, 300)); } catch { /* tree invalid at this vol/time: fall back to BSM */ }
+  }
+  return P.bsmPrice(S, p.K, T, p.r, sigma, p.q, p.kind);
+}
+function renderWhatIf() {
+  const c = cache; if (!c) return; const { p } = c, s = sgn();
+  const daysTotal = Math.max(1, Math.round(p.T * 365));
+  const wd = $('wiDays'); wd.max = daysTotal; if (+wd.value > daysTotal) wd.value = daysTotal;
+  const ds = parseFloat($('wiSpot').value), dv = parseFloat($('wiVol').value), dd = parseFloat(wd.value);
+  $('wiSpotOut').textContent = `${ds >= 0 ? '+' : ''}${ds}%`;
+  $('wiVolOut').textContent = `${dv >= 0 ? '+' : ''}${dv} pts`;
+  $('wiDaysOut').textContent = `${dd} of ${daysTotal}`;
+  const paid = paidPremium(), now = modelPrice();
+  const S1 = p.S * (1 + ds / 100), sig1 = Math.max(0.01, p.sigma + dv / 100), T1 = p.T - dd / 365;
+  const val1 = valueAt(p, S1, T1, sig1);
+  const pnl = s * (val1 - paid);
+  const cls = pnl > 1e-9 ? 'good' : pnl < -1e-9 ? 'bad' : '';
+  $('wiStats').innerHTML = [
+    ['Option value then', fmt(val1, 4), T1 <= 1e-9 ? 'at expiry = intrinsic' : `S ${fmt(S1, 2)} · σ ${pct(sig1, 1)} · ${Math.round(T1 * 365)}d left`, ''],
+    ['Your P&L / share', `${pnl >= 0 ? '+' : '−'}${fmt(Math.abs(pnl), 4)}`, state.side === 'long' ? 'value then − premium paid' : 'premium collected − value then', cls],
+    ['P&L / contract', `${pnl >= 0 ? '+' : '−'}$${Math.abs(pnl * 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`, '100 shares', cls],
+    ['Return on premium', paid > 0 ? `${pnl >= 0 ? '+' : '−'}${Math.abs((pnl / paid) * 100).toFixed(1)}%` : '—', Number.isFinite(getPremium()) ? 'on your premium' : 'no premium entered: using model price', cls],
+  ].map(([k, v, sub, tone]) => `<div class="stat"><div class="k">${k}</div><div class="v ${tone}">${v}</div><div class="s">${sub}</div></div>`).join('');
+
+  // attribution of the move: entry edge, then Greeks
+  const g = p.style === 'american' ? c.ag : c.g, dS = S1 - p.S, dT = dd / 365;
+  const parts = [
+    ['Edge at entry', s * (now - paid)],
+    ['Delta', s * g.delta * dS],
+    ['Gamma', s * 0.5 * g.gamma * dS * dS],
+    ['Vega', s * g.vega * (sig1 - p.sigma)],
+    ['Theta', s * g.theta * dT],
+  ];
+  const explained = parts.reduce((a, [, v]) => a + v, 0);
+  parts.push(['Other (higher order)', pnl - explained]);
+  draw('wiWaterfall', [{
+    type: 'waterfall', orientation: 'v', x: [...parts.map((x) => x[0]), 'Total P&L'], y: [...parts.map((x) => x[1]), 0],
+    measure: [...parts.map(() => 'relative'), 'total'],
+    increasing: { marker: { color: '#3fae78' } }, decreasing: { marker: { color: '#e5484d' } }, totals: { marker: { color: '#f5a623' } },
+    connector: { line: { color: '#3a4451' } }, text: [...parts.map((x) => (x[1] >= 0 ? '+' : '') + x[1].toFixed(3)), (pnl >= 0 ? '+' : '') + pnl.toFixed(3)], textposition: 'outside', cliponaxis: false,
+  }], baseLayout({ yaxis: { title: 'P&L per share', gridcolor: '#252c36', zerolinecolor: '#5a6572' }, xaxis: { gridcolor: 'rgba(0,0,0,0)' }, margin: { l: 60, r: 16, t: 24, b: 50 }, showlegend: false }));
+
+  // heat map: spot move x (days passed | vol change)
+  const mode = $('wiHeat').value;
+  const xs = linspace(-30, 30, 41);
+  const ys = mode === 'days' ? linspace(0, daysTotal, Math.min(daysTotal + 1, 25)).map((v) => Math.round(v)) : linspace(-20, 20, 21);
+  const z = ys.map((y) => xs.map((x) => {
+    const S2 = p.S * (1 + x / 100);
+    const T2 = mode === 'days' ? p.T - y / 365 : p.T - dd / 365;
+    const sg = mode === 'days' ? sig1 : Math.max(0.01, p.sigma + y / 100);
+    const v = T2 <= 1e-9 ? P.intrinsic(S2, p.K, p.kind) : P.bsmPrice(S2, p.K, T2, p.r, sg, p.q, p.kind);
+    return s * (v - paid);
+  }));
+  const zmax = Math.max(...z.flat().map(Math.abs)) || 1;
+  draw('wiHeatmap', [
+    { type: 'heatmap', x: xs, y: ys, z, zmin: -zmax, zmax, colorscale: [[0, '#e5484d'], [0.5, '#12161b'], [1, '#3fae78']], colorbar: { title: { text: 'P&L' }, thickness: 12, len: 0.8 }, hovertemplate: 'spot %{x:+.1f}%<br>' + (mode === 'days' ? '%{y}d passed' : 'vol %{y:+.1f} pts') + '<br>P&L %{z:.3f}<extra></extra>' },
+    { type: 'scatter', mode: 'markers', x: [ds], y: [mode === 'days' ? dd : dv], marker: { color: '#f5a623', size: 11, line: { color: '#000', width: 1.5 } }, hoverinfo: 'skip', showlegend: false },
+  ], baseLayout({ xaxis: { title: 'Spot move (%)', gridcolor: 'rgba(0,0,0,0)' }, yaxis: { title: mode === 'days' ? 'Days passed' : 'Volatility change (pts)', gridcolor: 'rgba(0,0,0,0)' }, margin: { l: 60, r: 16, t: 16, b: 50 }, showlegend: false,
+    shapes: [{ type: 'line', x0: 0, x1: 0, yref: 'paper', y0: 0, y1: 1, line: { color: '#cbd2dc', dash: 'dot', width: 1 } }] }));
 }
 
 // ---------------------------------------------------------------- wiring
@@ -326,12 +453,14 @@ function update() {
   clearTimeout(renderTimer);
   renderTimer = setTimeout(() => {
     state.lsmc = null; $('lsmcStatus').textContent = '';
-    compute(); renderHero(); renderCurrentTab(); updateIV();
+    try {
+      syncLockedSigma(); compute(); syncSlider(); renderHero(); renderBanner(); renderIvBox(); renderCurrentTab();
+    } catch (e) { showError(e.message); }
   }, 120);
 }
 function renderCurrentTab() {
   if (!cache) return;
-  ({ overview: renderOverview, greeks: renderGreeks, payoff: renderPayoff, tree: renderTree, checks: renderChecks, surface: () => {}, how: () => {} }[state.tab])();
+  ({ overview: renderOverview, greeks: renderGreeks, payoff: renderPayoff, whatif: renderWhatIf, tree: renderTree, checks: renderChecks, surface: () => {}, how: () => {}, guide: () => {} }[state.tab])();
 }
 function setTab(t) {
   state.tab = t;
@@ -339,6 +468,8 @@ function setTab(t) {
   document.querySelectorAll('.tabpane').forEach((p) => p.classList.toggle('on', p.id === 'tab-' + t));
   renderCurrentTab();
   if (t === 'surface' && !$('surfacePlot').data) loadSurface();
+  if (t === 'guide') loadGuide();
+  if (t !== 'overview') window.scrollTo({ top: 0 });
   window.dispatchEvent(new Event('resize'));
 }
 
@@ -351,7 +482,18 @@ function init() {
     update();
   }));
   ['S', 'K', 'days', 'sigma', 'r', 'q'].forEach((id) => $(id).addEventListener('input', update));
-  $('premium').addEventListener('input', () => { update(); });
+  $('premium').addEventListener('input', update);
+  $('premSlider').addEventListener('input', () => { $('premium').value = (+$('premSlider').value).toFixed(4); update(); });
+  $('lockIv').addEventListener('change', update);
+  document.querySelectorAll('#premChips .chip').forEach((b) => b.addEventListener('click', () => {
+    const v = b.dataset.p, model = modelPrice();
+    if (v === 'clear') $('premium').value = '';
+    else if (v === 'model') { if (Number.isFinite(model)) $('premium').value = +model.toFixed(4); }
+    else { const base = Number.isFinite(getPremium()) ? getPremium() : model; if (Number.isFinite(base)) $('premium').value = +Math.max(base * (1 + parseFloat(v)), 0).toFixed(4); }
+    update();
+  }));
+  ['wiSpot', 'wiVol', 'wiDays'].forEach((id) => $(id).addEventListener('input', renderWhatIf));
+  $('wiHeat').addEventListener('change', renderWhatIf);
   $('steps').addEventListener('input', () => { $('stepsOut').textContent = $('steps').value; update(); });
   document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
   $('loadTicker').addEventListener('click', loadTicker);
@@ -374,10 +516,11 @@ function init() {
       $('runLsmc').disabled = false; renderOverview();
     }, 30);
   });
+  $('guideLink').addEventListener('click', (e) => { e.preventDefault(); setTab('guide'); });
   const hashTab = location.hash.replace('#', '');
   refreshPill();
   update();
-  if (['overview', 'greeks', 'payoff', 'tree', 'surface', 'checks', 'how'].includes(hashTab)) setTab(hashTab);
+  if (['overview', 'greeks', 'payoff', 'whatif', 'tree', 'surface', 'checks', 'guide', 'how'].includes(hashTab)) setTab(hashTab);
 }
 
 async function refreshPill() {

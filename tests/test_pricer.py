@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from pricer.binomial import american_greeks, american_price, binomial_tree, european_tree_price
+from pricer.binomial import american_greeks, american_implied_vol, american_price, binomial_tree, european_tree_price
 from pricer.bsm import bsm_greeks, bsm_price, implied_vol, implied_vol_vec
 from pricer.checks import run_sanity_checks
 from pricer.lsmc import lsmc_price
@@ -146,3 +146,11 @@ def test_surface_recovers_known_vol_function():
     assert (np.diff(w, axis=0) >= -1e-9).all()
     # dividend yield recovered from put-call parity (true q = 1%)
     assert np.mean(list(surf.implied_q.values())) == pytest.approx(0.01, abs=0.002)
+
+
+def test_american_implied_vol_roundtrip_including_short_expiry():
+    # the tree is invalid for sigma < |r-q| sqrt(dt); the solver must not blow up on that part of its bracket
+    px = american_price(100, 100, 1.0, 0.05, 0.2, 0.0, "put", 300)
+    assert american_implied_vol(px, 100, 100, 1.0, 0.05, 0.0, "put", 300) == pytest.approx(0.2, abs=1e-4)
+    px = american_price(100, 100, 0.02, 0.05, 0.3, 0.0, "put", 300)
+    assert american_implied_vol(px, 100, 100, 0.02, 0.05, 0.0, "put", 300) == pytest.approx(0.3, abs=1e-3)

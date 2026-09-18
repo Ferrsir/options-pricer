@@ -1,0 +1,526 @@
+<h1>Plain-English guide: what is going on, and how to read every number and graph</h1>
+<p>Nothing here assumes you know finance. Every example uses one <strong>reference case</strong> so the numbers are easy to check:</p>
+<blockquote>
+<p>A stock trades at <strong>$100</strong>. You look at an option to buy or sell it at <strong>$100</strong>, expiring in <strong>1 year</strong>. A safe bank deposit pays <strong>5%</strong> a year. The stock's volatility is <strong>20%</strong>.</p>
+</blockquote>
+<p>(These are the slide's numbers: a call is worth <strong>$10.4506</strong>, a European put <strong>$5.5735</strong>, an American put about <strong>$6.09</strong>.)</p>
+<hr />
+<h2>0. The one-minute version</h2>
+<ul>
+<li>A stock price is unpredictable. An <strong>option</strong> is a contract whose payoff depends on where the price ends up. It costs money up front. That price is the <strong>premium</strong>.</li>
+<li><strong>The question of the whole course:</strong> what is a <em>fair</em> premium, given that nobody can predict the stock?</li>
+<li><strong>Black-Scholes-Merton's answer:</strong> the fair price is the <strong>cost of building the same payoff yourself</strong> by trading the stock and holding cash (this is called <em>replicating</em> or <em>hedging</em>). If the option sold for more or less than the cost of building it, someone could make free money. So the price is pinned down by <em>cost of construction</em>, not by anyone's opinion.</li>
+<li><strong>The surprising consequence:</strong> the stock's expected return (whether it will go up or down on average) <strong>does not appear in the price</strong>. Only <em>how much it wiggles</em> (volatility) matters. Two people who disagree completely on direction must still agree on the option's price.</li>
+<li><strong>What this website/tool does:</strong>
+  1. computes the fair premium three different ways (formula, tree, random simulation),
+  2. shows how sensitive that price is to everything (the <strong>Greeks</strong>),
+  3. lets you type in a premium someone is offering and tells you whether it looks cheap or expensive, and what volatility it implies,
+  4. shows what happens to your profit if the stock, the volatility or time moves (the <strong>What-if</strong> tab).</li>
+</ul>
+<hr />
+<h2>1. Words you need</h2>
+<table class="tbl">
+<thead>
+<tr>
+<th>Word</th>
+<th>Plain English</th>
+<th>Reference case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Underlying / stock</strong></td>
+<td>The thing the option is written on (a stock, an index like the Nasdaq-100).</td>
+<td>The $100 stock</td>
+</tr>
+<tr>
+<td><strong>Spot, <code>S</code></strong></td>
+<td>Today's price of the underlying. ("On the spot" = right now.)</td>
+<td>$100</td>
+</tr>
+<tr>
+<td><strong>Strike, <code>K</code></strong></td>
+<td>The fixed price written in the contract that you may buy or sell at.</td>
+<td>$100</td>
+</tr>
+<tr>
+<td><strong>Expiry, <code>T</code></strong></td>
+<td>When the contract ends. The tool asks for <em>days</em>; the math uses <em>years</em> (days ÷ 365).</td>
+<td>1 year (365 days)</td>
+</tr>
+<tr>
+<td><strong>Call</strong></td>
+<td>The <strong>right (not the obligation) to BUY</strong> at the strike. You want the price to go <strong>up</strong>.</td>
+<td></td>
+</tr>
+<tr>
+<td><strong>Put</strong></td>
+<td>The <strong>right (not the obligation) to SELL</strong> at the strike. You want the price to go <strong>down</strong> (or you want insurance).</td>
+<td></td>
+</tr>
+<tr>
+<td><strong>Premium</strong></td>
+<td>What the option costs, <strong>per share</strong>. One standard contract covers <strong>100 shares</strong>, so multiply by 100 for dollars.</td>
+<td>Call: $10.45 per share = <strong>$1,045</strong> per contract</td>
+</tr>
+<tr>
+<td><strong>Long / Short</strong></td>
+<td>Long = you <strong>bought</strong> the option (you paid premium). Short = you <strong>sold</strong> it (you collected premium, and you owe the payoff if it is exercised).</td>
+<td></td>
+</tr>
+<tr>
+<td><strong>In / at / out of the money</strong></td>
+<td>Call: in the money (ITM) if <code>S &gt; K</code>. Put: ITM if <code>S &lt; K</code>. At the money (ATM) if <code>S ≈ K</code>. Out of the money (OTM) otherwise.</td>
+<td>Reference option is ATM</td>
+</tr>
+<tr>
+<td><strong>Intrinsic value</strong></td>
+<td>What the option would pay if exercised <em>right now</em>: <code>max(S − K, 0)</code> for a call, <code>max(K − S, 0)</code> for a put.</td>
+<td>$0 (it is ATM)</td>
+</tr>
+<tr>
+<td><strong>Time value</strong></td>
+<td>Premium minus intrinsic value. You are paying for the <em>chance</em> the option ends up worth more.</td>
+<td>All $10.45</td>
+</tr>
+<tr>
+<td><strong>Volatility, <code>σ</code> (sigma)</strong></td>
+<td>How violently the price moves, in percent per year. 20% means the price typically ends the year within about ±20% of where it started (that is one standard deviation). Per day it is about 20% ÷ √252 ≈ 1.26%.</td>
+<td>20%</td>
+</tr>
+<tr>
+<td><strong>Historical vol</strong></td>
+<td>How much the stock <em>actually</em> moved in the past (the ticker box fills this in from Yahoo).</td>
+<td></td>
+</tr>
+<tr>
+<td><strong>Implied vol</strong></td>
+<td>The volatility you must plug into the formula for it to output the <em>market's price</em>. It is what the market is "saying" about future movement.</td>
+<td></td>
+</tr>
+<tr>
+<td><strong>Risk-free rate, <code>r</code></strong></td>
+<td>What a safe deposit earns (we use the 13-week US T-bill). It matters because you pay the strike <em>later</em>, so its value today is discounted.</td>
+<td>5%</td>
+</tr>
+<tr>
+<td><strong>Dividend yield, <code>q</code></strong></td>
+<td>Cash the stock pays out each year as a percent of price. Holders of options don't get dividends, so a higher <code>q</code> lowers call prices and raises put prices.</td>
+<td>0%</td>
+</tr>
+<tr>
+<td><strong>European vs American</strong></td>
+<td>European: can only be exercised <strong>at expiry</strong>. American: can be exercised <strong>any time</strong>. (Most listed stock options are American; index options like NDX are usually European.)</td>
+<td></td>
+</tr>
+<tr>
+<td><strong>Model price vs market price</strong></td>
+<td>Model price: what our formulas say it <em>should</em> cost. Market price: what someone is actually asking. The gap is your potential <strong>edge</strong>.</td>
+<td></td>
+</tr>
+<tr>
+<td><strong>Risk-neutral</strong></td>
+<td>A pretend world where every asset grows at the risk-free rate. We use it <em>only because</em> hedging makes prices identical to what they would be in that world. It is a calculation trick, not a forecast. Probabilities marked "risk-neutral" are not real-world odds.</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>2. How it works (three engines that should agree)</h2>
+<h3>Engine 1: the Black-Scholes-Merton formula (closed form)</h3>
+<p>You give it <code>S, K, T, r, σ, q</code>; it returns the premium in one line of math. The idea behind it:</p>
+<ol>
+<li>Suppose you <strong>sold</strong> an option. You are now exposed to the stock moving.</li>
+<li>Buy a certain number of shares, <code>Δ</code> ("delta"), so that a small stock move hurts the option and helps the shares equally. The random part cancels out.</li>
+<li>What is left is <strong>riskless</strong>, so it must earn exactly the risk-free rate (otherwise there is free money).</li>
+<li>Solve that condition and you get the price. The stock's expected return <strong>cancelled out</strong> along the way. That is why the price does not depend on your view of direction.</li>
+</ol>
+<p><strong>What to remember:</strong> the price depends on <code>σ</code> (how much it moves), not on where you think it is going. <strong>Curvature is the product</strong>: an option's payoff is a bent line (it has a "kink" at the strike), and randomness is worth more when a payoff is bent. That is why <strong>higher volatility always raises an option's price</strong>, calls and puts alike.</p>
+<h3>Engine 2: the binomial tree (and how American options are priced)</h3>
+<p>Imagine time cut into many small steps. In each step the stock goes <strong>up</strong> by a fixed factor or <strong>down</strong> by a fixed factor. With hundreds of steps this builds a "tree" of possible prices.</p>
+<ul>
+<li>At expiry, every branch has a known payoff.</li>
+<li>Walk <strong>backwards</strong> to today. At each spot on the tree, the option's value is the discounted average of its two children, using a special weight <code>q̃</code> (the <em>risk-neutral probability</em>). That weight is not a forecast: it is whatever number makes the stock earn the risk-free rate on average.</li>
+<li><strong>American options:</strong> at every spot, also compare "exercise right now" with "keep waiting" and take the <strong>larger</strong>. That single comparison is the only difference from the European tree.</li>
+<li>As you add steps, the tree price converges to the Black-Scholes price. That is how we <strong>verify</strong> the tree.</li>
+</ul>
+<h3>Engine 3: Longstaff-Schwartz Monte Carlo (LSMC)</h3>
+<p>Instead of a tree, simulate thousands of random price paths. To decide "exercise or wait?" at each date, fit a curve (a regression) that estimates what waiting is worth from the current price, then exercise if the payoff beats that estimate. It is slightly <strong>biased low</strong> because the fitted curve is only an estimate. This is the method that scales to hard problems, and the regression step is exactly what the RKHS project generalises.</p>
+<hr />
+<h2>3. Reading the numbers, top to bottom</h2>
+<h3>The "Your premium" box (left panel)</h3>
+<p>Type any premium (per share) you want to test, or drag the slider.</p>
+<ul>
+<li><strong>= model, ±10%, ±25%</strong> buttons: jump to the model price, or a price that much above or below it.</li>
+<li><strong>Implied vol:</strong> the volatility that would make the formula produce <em>exactly your premium</em>. Compare it to your σ input: if implied vol is higher, your premium is pricing in <strong>more</strong> movement than you assumed.</li>
+<li><strong>Lock σ to this premium's implied vol:</strong> makes the model agree with your premium (so every chart and Greek is computed at the market's implied vol). This is how desks work: <strong>they quote volatility, not dollars.</strong> When a desk says "bid at 12.3", that is a volatility. On the reference option 12.3% vol is $7.61.</li>
+</ul>
+<h3>The banner that appears when you enter a premium</h3>
+<table class="tbl">
+<thead>
+<tr>
+<th>Cell</th>
+<th>Meaning</th>
+<th>Example (long call, premium $12)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Your premium</strong></td>
+<td>What you pay (long) or collect (short), per share and per contract.</td>
+<td>$12.00 → $1,200 per contract</td>
+</tr>
+<tr>
+<td><strong>Edge vs model</strong></td>
+<td><em>Your side's</em> advantage: model price minus premium if you are long; premium minus model if you are short. Green = you are getting a good deal by the model, red = a bad one.</td>
+<td>−$1.55 (−14.8%): the premium is rich for the buyer</td>
+</tr>
+<tr>
+<td><strong>Implied vol</strong></td>
+<td>Vol that makes the model equal your premium.</td>
+<td>24.1% vs your 20%</td>
+</tr>
+<tr>
+<td><strong>Breakeven</strong></td>
+<td>Where the stock must be at expiry for you to make zero. Call: <code>K + premium</code>. Put: <code>K − premium</code>.</td>
+<td>112.00</td>
+</tr>
+<tr>
+<td><strong>P(profit)</strong></td>
+<td>Chance of ending profitable <strong>under the risk-neutral measure</strong>. This is a model quantity, not a real-world forecast.</td>
+<td>33.8%</td>
+</tr>
+<tr>
+<td><strong>Max loss / gain</strong></td>
+<td>Long option: lose at most the premium; a long call can gain without limit. Short option: the reverse.</td>
+<td>12.00 / unbounded</td>
+</tr>
+</tbody>
+</table>
+<p>"Edge" is not a guarantee: it says the <em>model, at your σ</em>, thinks the price is off. If your σ is wrong, so is the edge. This is why the What-if tab and the implied vol matter.</p>
+<h3>The five price cards</h3>
+<table class="tbl">
+<thead>
+<tr>
+<th>Card</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Premium</strong> (big orange)</td>
+<td>The model price for the style you selected (European = BSM, American = tree).</td>
+</tr>
+<tr>
+<td><strong>Intrinsic value</strong></td>
+<td>Worth if exercised now. Zero for out-of-the-money.</td>
+</tr>
+<tr>
+<td><strong>Time value</strong></td>
+<td>Everything above intrinsic. It shrinks to zero as expiry arrives (<strong>time decay</strong>).</td>
+</tr>
+<tr>
+<td><strong>Breakeven</strong></td>
+<td>As above, using the model premium.</td>
+</tr>
+<tr>
+<td><strong>P(finish ITM)</strong></td>
+<td>Risk-neutral chance the option ends in the money, <code>N(d2)</code>. For the reference call: 56.0%.</td>
+</tr>
+</tbody>
+</table>
+<h3>The "Pricing models" table</h3>
+<table class="tbl">
+<thead>
+<tr>
+<th>Row</th>
+<th>Meaning</th>
+<th>Reference call</th>
+<th>Reference put</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Black-Scholes-Merton</td>
+<td>The formula. European. The benchmark.</td>
+<td>10.4506</td>
+<td>5.5735</td>
+</tr>
+<tr>
+<td>European tree</td>
+<td>Tree with no early exercise. Should be within a cent or so of BSM.</td>
+<td>10.4466 (500 steps)</td>
+<td>≈ 5.57</td>
+</tr>
+<tr>
+<td>American tree</td>
+<td>Tree with early exercise. For a call with no dividends, <strong>identical to European</strong>. For a put, <strong>higher</strong>.</td>
+<td>10.4466</td>
+<td>6.09</td>
+</tr>
+<tr>
+<td>Early-exercise premium</td>
+<td>American minus European.</td>
+<td>0.0000</td>
+<td>≈ 0.52</td>
+</tr>
+<tr>
+<td>LSMC</td>
+<td>Simulation. Slightly <em>below</em> the tree (biased low). ± is a 95% margin.</td>
+<td></td>
+<td>6.06 ± 0.04</td>
+</tr>
+</tbody>
+</table>
+<h3>The Greeks table: "if X changes by one unit, my option changes by…"</h3>
+<p>The Greeks are just <strong>slopes</strong> of the premium. They come in pairs (BSM formula, and the American tree). Long positions show as-is; short positions flip the signs.</p>
+<table class="tbl">
+<thead>
+<tr>
+<th>Greek</th>
+<th>Question it answers</th>
+<th>Reference call</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Delta Δ</strong></td>
+<td>If the stock rises <strong>$1</strong>, how much does the option gain? Also your <strong>hedge ratio</strong> (shares to hold against a short option) and a rough stand-in for P(ITM). Call: 0 to +1. Put: −1 to 0.</td>
+<td>0.637</td>
+<td>Stock $100→$101 changes the call 10.45→11.10</td>
+</tr>
+<tr>
+<td><strong>Gamma Γ</strong></td>
+<td>How fast <strong>delta itself</strong> changes per $1 move. It is the <strong>curvature</strong>, and it is what you are actually buying with an option. Largest <strong>at the money and close to expiry</strong>. Same for calls and puts.</td>
+<td>0.0188</td>
+<td>Delta moves from 0.637 to about 0.656 after a $1 rise</td>
+</tr>
+<tr>
+<td><strong>Vega</strong></td>
+<td>If implied volatility rises <strong>1 point</strong> (say 20%→21%), how much does the option gain? Biggest for at-the-money, long-dated options. Same for calls and puts.</td>
+<td>0.375</td>
+<td>20%→21% vol: call 10.45→10.83</td>
+</tr>
+<tr>
+<td><strong>Theta Θ</strong></td>
+<td>How much value <strong>bleeds away per day</strong> just from time passing. Usually negative for long options: it is the <strong>rent you pay for gamma</strong>.</td>
+<td>−0.0176 per day (1-year option). A 30-day ATM call bleeds about −0.045 per day</td>
+<td></td>
+</tr>
+<tr>
+<td><strong>Rho ρ</strong></td>
+<td>If the interest rate rises <strong>1 point</strong>, how much does the option gain? Usually small for short-dated options. Positive for calls, negative for puts.</td>
+<td>0.532</td>
+<td>5%→6%: call 10.45→10.99</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Gamma and theta are one trade seen from two sides.</strong> If you own an option (long gamma), you profit when the stock moves a lot and you pay theta every day it doesn't. A delta-hedged long option makes money when the stock's <strong>realised</strong> volatility is bigger than the <strong>implied</strong> volatility you paid for, and loses when it is smaller. That one sentence is the entire "gamma scalping" business.</p>
+<hr />
+<h2>4. Reading the graphs</h2>
+<h3>Payoff tab: "what do I make or lose?"</h3>
+<ul>
+<li><strong>Orange line, "At expiry"</strong>: the hockey stick. Flat until the strike, then rising (call) or falling (put), shifted down by the premium. Below the zero line you are losing money.</li>
+<li><strong>Blue line, "Today"</strong>: what the position is worth <em>right now</em> if the stock jumps to the price on the x-axis. It is smooth and above the orange line: that gap is <strong>time value</strong>.</li>
+<li><strong>Green dotted line, "Halfway to expiry"</strong>: the blue curve sliding down onto the orange one as time passes.</li>
+<li><strong>Red dashed vertical</strong>: today's stock price. <strong>Green dotted vertical</strong>: your breakeven.</li>
+<li>Toggle <strong>Short</strong> and the picture flips upside down: capped gain (the premium), possibly huge loss.</li>
+</ul>
+<h3>What-if tab: "what happens if…?"</h3>
+<ul>
+<li><strong>Sliders</strong>: move the stock (±30%), volatility (±20 points), and the days that go by. The four cards show the option's new value and your profit or loss, per share and per contract.</li>
+<li><strong>Waterfall chart</strong>: breaks your profit into pieces.</li>
+<li><strong>Edge at entry</strong>: how much you gained or lost just by the premium you got versus the model.</li>
+<li><strong>Delta</strong>: gain from the stock's move, to first order.</li>
+<li><strong>Gamma</strong>: the extra from curvature (positive for long options if the stock moves a lot in either direction).</li>
+<li><strong>Vega</strong>: gain or loss from volatility changing.</li>
+<li><strong>Theta</strong>: what time decay cost you.</li>
+<li><strong>Other</strong>: what those first-order pieces miss (higher-order effects).</li>
+<li><strong>Total</strong> (orange) is your actual P&amp;L.</li>
+<li><strong>Heat map</strong>: green = profit, red = loss. The horizontal axis is the stock's move, the vertical axis is days passed (or volatility change, if you switch it). The yellow dot is where the sliders are now. Notice how, for a call, the green region shrinks and its left edge slides to the right as more days pass: time decay eats the value, so the stock has to go further to break even.</li>
+</ul>
+<h3>Greeks tab</h3>
+<p>Six small charts, each showing one Greek across a range of stock prices. Each line is a different time to expiry; the red dashed line is the strike.</p>
+<ul>
+<li><strong>Delta</strong>: an S-shaped curve. Flat near 0 (deep out of the money), rising through 0.5 near the strike, flat near 1 (deep in the money). The shorter the time left, the <strong>steeper</strong> the S.</li>
+<li><strong>Gamma</strong>: a bell, tallest right at the strike. It gets <strong>taller and narrower</strong> as expiry approaches, which is why an at-the-money option about to expire is so twitchy.</li>
+<li><strong>Vega</strong>: also a bell at the strike, but <strong>larger for long-dated</strong> options.</li>
+<li><strong>Theta</strong>: a dip at the strike. It gets <strong>much deeper as expiry nears</strong>: at-the-money options lose value fastest in the last few weeks.</li>
+<li><strong>Rho</strong>: a step, flat far from the strike, changing across it.</li>
+<li><strong>Premium</strong>: the option's price curve. It is smoothly curved above the hockey stick, and it converges to it as time runs out.</li>
+<li><strong>X axis</strong> dropdown: switch the chart to be against <strong>days to expiry</strong> or against <strong>volatility</strong>.</li>
+<li><strong>Greek surface (3-D)</strong>: the same information over two variables at once (stock price and time). The tall ridge of <strong>gamma</strong> rushing up at the strike as time approaches zero is the picture to remember: "gamma spiking at the money as expiry approaches."</li>
+</ul>
+<h3>Tree &amp; LSMC tab</h3>
+<ul>
+<li><strong>Convergence chart</strong>: left axis is the price, horizontal is the number of tree steps (log scale). The blue European tree line closes in on the green dashed Black-Scholes line as steps increase. The dotted line (right axis) is the <strong>error</strong>, which zig-zags because of where the strike falls between tree levels. <em>That zigzag is correct and expected</em>; if it were perfectly smooth you should be suspicious. The orange American line sits <strong>above</strong> the blue one for the puts by the early-exercise premium.</li>
+<li><strong>Early-exercise boundary</strong>: for an American put, the curve is the stock price <strong>below which exercising immediately is better than waiting.</strong> It starts well below the strike and rises to meet the strike at expiry. Why: deep in the money, the option has little "insurance value" left, and getting the strike in cash <strong>now</strong> lets you earn interest on it. For a call with no dividends the chart says "early exercise is never optimal": Merton's theorem (selling the option always beats exercising it, because exercising early throws away the time value and gives up the interest on the strike).</li>
+</ul>
+<h3>Vol surface tab</h3>
+<p>This is the picture from your slide reference, and it is the most important idea after the formula itself.</p>
+<ul>
+<li>Each option on the same stock has a <strong>different implied volatility</strong> depending on its strike and expiry, even though Black-Scholes says there should be one number. The surface plots them all.</li>
+<li><strong>Horizontal axis, "log-moneyness" <code>ln(K/S)</code>:</strong> a way of saying "how far the strike is from today's price". <strong>0 = at the money.</strong> Negative = strikes <em>below</em> the price (puts that insure against crashes). Positive = strikes above.</li>
+<li><strong>Depth axis, "time to expiry":</strong> how many years until each option expires.</li>
+<li><strong>Height and color:</strong> implied volatility. Blue = low, green = medium, yellow/orange = high.</li>
+<li><strong>The red dashed line</strong> runs through the at-the-money options across all expiries.</li>
+<li><strong>The skew:</strong> the surface is almost always <strong>higher on the left</strong> (strikes below the price). Since the crash of <strong>October 1987</strong> (S&amp;P 500 down 20.5% in a day, a move the model calls essentially impossible), crash insurance is permanently more expensive. Traders use the volatility as a dial to make the formula output the price they actually want to charge. <strong>Each strike has its own σ, and the surface is a map of where the market's fear lives and what it costs.</strong></li>
+<li><strong>Smile chart (below the 3-D plot):</strong> three slices of the surface for short, medium and long expiry. Down and to the right = skew. A U-shape = smile.</li>
+<li><strong>Rough patches/spikes:</strong> real quotes are noisy and illiquid far from the money. The pipeline (log-moneyness → Savitzky-Golay smoothing → PCHIP interpolation) smooths them but never removes all of it.</li>
+</ul>
+<h3>Sanity checks tab</h3>
+<p>Nine automatic tests from the homework, run live on your current inputs. <strong>"If one fails, stop and find out why."</strong> They test: the reference price (10.4506), put-call parity (call − put = stock − discounted strike, which must hold to machine precision), tree vs formula, American call = European call (no dividends), American put &gt; European put, deep in-the-money ≈ intrinsic, deep out-of-the-money ≈ 0, higher vol ⇒ higher price, and rate → 0 removes the put's early-exercise edge.</p>
+<hr />
+<h2>5. Ten experiments (with what you should see)</h2>
+<ol>
+<li><strong>Change nothing but volatility</strong>: 10% → 20% → 30%. Call goes 6.80 → 10.45 → 14.23. Higher vol = a more valuable option, always.</li>
+<li><strong>Cut days to expiry</strong> from 365 to 30 to 1. The premium shrinks; the time value goes to zero; theta gets steeper.</li>
+<li><strong>Switch to Put + American</strong>: American 6.09 vs European 5.57. Open the Tree tab to see the early-exercise curve.</li>
+<li><strong>Set the rate to 0</strong> with an American put: the two prices become identical. No interest to earn, so no reason to exercise early.</li>
+<li><strong>American call, dividend 0</strong>: American = European exactly. Now set the dividend yield to 8%: the American call is now worth more.</li>
+<li><strong>Type 12 as your premium</strong> (long call): the implied vol is about 24% vs your 20%. Edge is red. Drag the slider down and watch the edge turn green once the premium drops below 10.45.</li>
+<li><strong>Lock σ to the premium</strong>, then switch to the Greeks tab: every chart is now at the market's implied vol.</li>
+<li><strong>What-if with the call</strong>: spot +10%, days passed 0: the profit is roughly delta × $10 plus a bit of gamma. Now move days passed to 90: watch theta pull it down in the waterfall.</li>
+<li><strong>Short a put</strong> (Short + Put): banner says max gain = premium, max loss = strike minus premium. In the What-if tab drag the spot to −20%: a huge loss compared with the small premium you collected. That is what "selling insurance" means.</li>
+<li><strong>Load a ticker (NDX, SPY, AAPL)</strong> and open <strong>Vol surface</strong>: find the skew (higher on the left) and the ATM line.</li>
+</ol>
+<hr />
+<h2>6. Cheat sheet: the four basic positions (from your slide)</h2>
+<table class="tbl">
+<thead>
+<tr>
+<th>Position</th>
+<th>View</th>
+<th>Cash</th>
+<th>Max gain</th>
+<th>Max loss</th>
+<th>Breakeven</th>
+<th>Greeks</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Long call</strong></td>
+<td>Bullish</td>
+<td>Pay premium</td>
+<td>Unbounded</td>
+<td>The premium</td>
+<td><code>K + premium</code></td>
+<td>+Δ, +Γ, +vega, −Θ</td>
+</tr>
+<tr>
+<td><strong>Short call</strong></td>
+<td>Neutral to bearish</td>
+<td>Collect premium</td>
+<td>The premium</td>
+<td>Unbounded</td>
+<td><code>K + premium</code></td>
+<td>−Δ, −Γ, −vega, +Θ</td>
+</tr>
+<tr>
+<td><strong>Long put</strong></td>
+<td>Bearish, or hedging</td>
+<td>Pay premium</td>
+<td><code>K − premium</code></td>
+<td>The premium</td>
+<td><code>K − premium</code></td>
+<td>−Δ, +Γ, +vega, −Θ</td>
+</tr>
+<tr>
+<td><strong>Short put</strong></td>
+<td>Neutral to bullish</td>
+<td>Collect premium</td>
+<td>The premium</td>
+<td><code>K − premium</code></td>
+<td><code>K − premium</code></td>
+<td>+Δ, −Γ, −vega, +Θ</td>
+</tr>
+</tbody>
+</table>
+<p>Rule of thumb: <strong>long options = long gamma and long vega, and they pay theta.</strong> Short options are the mirror image: they <strong>collect</strong> theta and are exposed to big moves.</p>
+<hr />
+<h2>7. Where each slide shows up</h2>
+<table class="tbl">
+<thead>
+<tr>
+<th>Slide</th>
+<th>Idea</th>
+<th>Where in the tool</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3 · Puts and calls</td>
+<td>Payoffs, kink, convexity, put-call parity</td>
+<td>Payoff tab; parity check</td>
+</tr>
+<tr>
+<td>4 · Strategies</td>
+<td>Long/short signs and max gain/loss</td>
+<td>Banner, Payoff, cheat sheet above</td>
+</tr>
+<tr>
+<td>6 · Bachelier and Thorp</td>
+<td>Edge, hedge, size</td>
+<td>Edge cell in the banner; Delta = hedge ratio</td>
+</tr>
+<tr>
+<td>8 · Geometric Brownian motion</td>
+<td><code>dS = μS dt + σS dW</code>; <code>(dW)² = dt</code></td>
+<td>LSMC simulates exactly this</td>
+</tr>
+<tr>
+<td>9 · Hedge away randomness</td>
+<td>The BSM PDE; μ vanishes</td>
+<td><code>bsm.py</code>; "How it works" tab</td>
+</tr>
+<tr>
+<td>10 · Rational option pricing</td>
+<td>American call = European; early exercise</td>
+<td>Sanity checks; exercise-boundary chart</td>
+</tr>
+<tr>
+<td>11 · Discretization</td>
+<td>The tree, <code>q̃</code>, backward induction</td>
+<td>Tree tab; <code>binomial.py</code></td>
+</tr>
+<tr>
+<td>12 · BSM failure</td>
+<td>Black Monday, the skew</td>
+<td>Vol-surface tab</td>
+</tr>
+<tr>
+<td>13 · What desks run</td>
+<td>Implied vol as the language; the surface</td>
+<td>Implied-vol box; Vol-surface tab</td>
+</tr>
+<tr>
+<td>15 · Reading the Greeks</td>
+<td>Delta, gamma, theta, vega</td>
+<td>Greeks table, Greeks tab, What-if waterfall</td>
+</tr>
+<tr>
+<td>16 · Takeaways</td>
+<td>Quote in vol; convexity is the product</td>
+<td>"Lock σ", What-if</td>
+</tr>
+<tr>
+<td>Homework</td>
+<td>BSM, tree, American, LSMC, Greeks</td>
+<td>The whole thing</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>8. Common confusions</h2>
+<ul>
+<li><strong>"If I don't know where the stock is going, how can it have a price?"</strong> Because the option can be <em>replicated</em> with the stock and cash. The price is the cost of that replication. Direction cancels out; movement (volatility) is what you are pricing.</li>
+<li><strong>"Why do both calls and puts get more expensive when volatility rises?"</strong> Both have a kink (a floor at zero). More randomness gives the upside more room while the floor caps the downside. This is Jensen's inequality: for a curved payoff, spreading the outcomes raises the average payoff.</li>
+<li><strong>"Is P(profit) the chance I actually make money?"</strong> Not exactly. It uses the risk-neutral world (stock drifting at the risk-free rate). Real-world odds depend on the stock's true drift, which nobody knows. Treat it as a comparison tool between contracts.</li>
+<li><strong>"Why is theta negative?"</strong> Every day that passes gives the option less time to move in your favour, so less time value. It is not a fee anyone charges; it is the price of holding curvature.</li>
+<li><strong>"Why does implied vol differ from what the ticker box says (historical vol)?"</strong> Historical vol is the past. Implied vol is the market's <em>price</em> for the future, including fear and demand for insurance. The gap between them is a big part of what options traders trade.</li>
+<li><strong>"The tree and the formula don't match exactly."</strong> They don't have to. The tree converges as steps increase and the small zigzag is a known feature of the method.</li>
+<li><strong>"The website says 'bundled snapshot' instead of live."</strong> Yahoo does not allow browser pages to call it directly. Run <code>python -m pricer serve</code> locally for any ticker, live.</li>
+<li><strong>"Is it advice?"</strong> No. It is an educational pricing tool, not a recommendation to buy or sell anything.</li>
+</ul>
