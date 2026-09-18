@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Options Premium Pricer</title>
+<meta name="description" content="Black-Scholes-Merton, American binomial tree and Longstaff-Schwartz pricer with Greeks, implied volatility and volatility surfaces. Traders@SMU HW 1.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0d10'/%3E%3Cpath d='M5 24 L13 12 L19 18 L27 7' fill='none' stroke='%23f5a623' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="logo" aria-hidden="true"><svg viewBox="0 0 32 32" width="26" height="26"><path d="M5 24 L13 12 L19 18 L27 7" fill="none" stroke="#f5a623" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div>
+      <h1>Options Premium Pricer</h1>
+      <p>Black-Scholes-Merton · American binomial tree · Longstaff-Schwartz · Greeks · Vol surface</p>
+    </div>
+  </div>
+  <div class="top-links">
+    <span class="pill" id="dataPill" title="Where market data comes from">data: checking…</span>
+    <a href="https://github.com/Ferrsir/options-pricer" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="panel inputs" aria-label="Inputs">
+    <section>
+      <h2>Underlying</h2>
+      <div class="row">
+        <input id="ticker" placeholder="Ticker — AAPL, SPY, NDX…" autocomplete="off" spellcheck="false" aria-label="Ticker">
+        <button id="loadTicker" class="btn primary">Load</button>
+      </div>
+      <p id="tickerStatus" class="hint" role="status">Pull spot, rate, dividend yield and historical vol from Yahoo Finance.</p>
+      <div id="volChips" class="chips" hidden></div>
+      <div id="chainPick" hidden>
+        <label>Expiry <select id="expirySel"></select></label>
+        <label>Contract <select id="strikeSel"></select></label>
+      </div>
+    </section>
+
+    <section>
+      <h2>Contract</h2>
+      <div class="seg" role="group" aria-label="Option type">
+        <button data-k="type" data-v="call" class="on">Call</button>
+        <button data-k="type" data-v="put">Put</button>
+      </div>
+      <div class="seg" role="group" aria-label="Position side">
+        <button data-k="side" data-v="long" class="on">Long (buy)</button>
+        <button data-k="side" data-v="short">Short (sell)</button>
+      </div>
+      <div class="seg" role="group" aria-label="Exercise style">
+        <button data-k="style" data-v="european" class="on">European</button>
+        <button data-k="style" data-v="american" >American</button>
+      </div>
+      <div class="grid2">
+        <label>Spot S<input id="S" type="number" step="any" value="100"></label>
+        <label>Strike K<input id="K" type="number" step="any" value="100"></label>
+        <label>Days to expiry<input id="days" type="number" step="any" value="365"></label>
+        <label>Volatility σ %<input id="sigma" type="number" step="any" value="20"></label>
+        <label>Risk-free rate r %<input id="r" type="number" step="any" value="5"></label>
+        <label>Dividend yield q %<input id="q" type="number" step="any" value="0"></label>
+      </div>
+      <label class="slider">Tree steps <output id="stepsOut">500</output>
+        <input id="steps" type="range" min="20" max="2000" step="10" value="500">
+      </label>
+    </section>
+
+    <section>
+      <h2>Market premium <span class="opt">optional</span></h2>
+      <div class="row">
+        <input id="premium" type="number" step="any" placeholder="Observed price → implied vol" aria-label="Market premium">
+      </div>
+      <div id="ivReadout" class="ivbox" hidden></div>
+    </section>
+
+    <section>
+      <h2>Data API <span class="opt">optional</span></h2>
+      <div class="row">
+        <input id="apiBase" placeholder="http://localhost:8000" aria-label="Data API base URL">
+        <button id="saveApi" class="btn">Save</button>
+      </div>
+      <p class="hint">Live option chains for any ticker need <code>python -m pricer serve</code> (see README). Without it the site uses bundled Yahoo snapshots.</p>
+    </section>
+  </aside>
+
+  <section class="content">
+    <div id="error" class="error" role="alert" hidden></div>
+
+    <div class="hero" id="hero"></div>
+
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="overview" class="on">Overview</button>
+      <button role="tab" data-tab="greeks">Greeks</button>
+      <button role="tab" data-tab="payoff">Payoff</button>
+      <button role="tab" data-tab="tree">Tree &amp; LSMC</button>
+      <button role="tab" data-tab="surface">Vol surface</button>
+      <button role="tab" data-tab="checks">Sanity checks</button>
+      <button role="tab" data-tab="how">How it works</button>
+    </nav>
+
+    <div class="tabpane on" id="tab-overview">
+      <div class="card">
+        <h3>Pricing models</h3>
+        <table id="modelTable" class="tbl"></table>
+        <div class="row lsmcrow">
+          <label class="inline">LSMC paths
+            <select id="lsmcPaths"><option>10000</option><option selected>20000</option><option>50000</option><option>100000</option></select>
+          </label>
+          <button id="runLsmc" class="btn">Run Longstaff-Schwartz</button>
+          <span id="lsmcStatus" class="hint"></span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Greeks <span class="opt" id="greeksNote"></span></h3>
+        <table id="greekTable" class="tbl"></table>
+      </div>
+    </div>
+
+    <div class="tabpane" id="tab-greeks">
+      <div class="card">
+        <div class="row wrap">
+          <label class="inline">X axis
+            <select id="greekX"><option value="spot">Spot price</option><option value="time">Days to expiry</option><option value="vol">Volatility</option></select>
+          </label>
+          <span class="hint" id="greekHint"></span>
+        </div>
+        <div id="greekGrid" class="greekgrid"></div>
+      </div>
+      <div class="card">
+        <div class="row wrap">
+          <h3 style="margin:0">Greek surface</h3>
+          <label class="inline">Greek
+            <select id="greek3d"><option>delta</option><option selected>gamma</option><option>vega</option><option>theta</option><option>rho</option><option>vanna</option><option>volga</option></select>
+          </label>
+        </div>
+        <div id="greekSurface" class="plot tall"></div>
+      </div>
+    </div>
+
+    <div class="tabpane" id="tab-payoff">
+      <div class="card">
+        <div id="payoffPlot" class="plot"></div>
+        <p class="hint" id="payoffNote"></p>
+      </div>
+    </div>
+
+    <div class="tabpane" id="tab-tree">
+      <div class="card"><h3>Convergence to Black-Scholes-Merton</h3><div id="convPlot" class="plot"></div>
+        <p class="hint">European tree error shrinks roughly like 1/steps (with a saw-tooth from how the strike sits on the lattice). The American curve sits above it by the early-exercise premium.</p></div>
+      <div class="card"><h3>Early-exercise boundary</h3><div id="boundaryPlot" class="plot"></div>
+        <p class="hint" id="boundaryNote"></p></div>
+    </div>
+
+    <div class="tabpane" id="tab-surface">
+      <div class="card">
+        <div class="row wrap">
+          <input id="surfTicker" placeholder="Ticker (NDX, SPY, AAPL…)" style="max-width:220px" aria-label="Surface ticker">
+          <button id="loadSurface" class="btn primary">Build surface</button>
+          <span id="surfStatus" class="hint"></span>
+        </div>
+        <div id="surfacePlot" class="plot xtall"></div>
+        <div id="smilePlot" class="plot"></div>
+        <p class="hint">Pipeline: log-moneyness k = ln(K/S) → OTM quotes → Black-Scholes implied vols → Savitzky-Golay smoothing per expiry → two-stage PCHIP interpolation (strike, then total variance in time). The red dashed line marks at-the-money.</p>
+      </div>
+      <div class="card">
+        <h3>Python render</h3>
+        <img class="render" src="assets/ndx_surface.png" alt="NASDAQ-100 implied volatility surface rendered with matplotlib">
+        <p class="hint">Generated with <code>python -m pricer surface NDX</code>. Same pipeline, static picture for slides.</p>
+      </div>
+    </div>
+
+    <div class="tabpane" id="tab-checks">
+      <div class="card"><h3>HW 1 sanity checks</h3>
+        <p class="hint">From the slide: “If one fails, stop and find out why.” These run live against your current inputs.</p>
+        <div id="checkList"></div></div>
+    </div>
+
+    <div class="tabpane" id="tab-how">
+      <div class="card prose" id="howText"></div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  Educational tool built for Traders@SMU HW 1. Not investment advice. Market data © Yahoo Finance and may be delayed or inaccurate.
+</footer>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "options-pricer"
+version = "1.0.0"
+description = "Options premium pricer: BSM, American (binomial + LSMC), Greeks, implied vol and vol surfaces"
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy", "matplotlib", "pandas", "yfinance"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+pricer = "pricer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
