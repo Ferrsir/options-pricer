@@ -42,7 +42,7 @@ export const resetApiProbe = () => { liveBase = undefined; };
 
 export async function loadSnapshots() {
   if (snapshots) return snapshots;
-  try { snapshots = await getJson('./data/snapshots.json?v=3'); } catch { snapshots = {}; }
+  try { snapshots = await getJson('./data/snapshots.json?v=4'); } catch { snapshots = {}; }
   return snapshots;
 }
 

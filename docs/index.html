@@ -3,122 +3,188 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Options Premium Pricer</title>
-<meta name="description" content="Black-Scholes-Merton, American binomial tree and Longstaff-Schwartz pricer with Greeks, implied volatility and volatility surfaces. Traders@SMU HW 1.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0d10'/%3E%3Cpath d='M5 24 L13 12 L19 18 L27 7' fill='none' stroke='%23f5a623' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="style.css?v=3">
+<title>Options Premium Pricer · Black-Scholes, American tree &amp; Greeks</title>
+<meta name="description" content="Price options with Black-Scholes-Merton, an American binomial tree and Longstaff-Schwartz Monte Carlo. Type any premium to see implied volatility, Greeks, P&amp;L scenarios and volatility surfaces. Traders@SMU HW 1.">
+<meta name="theme-color" content="#070b16">
+<link rel="canonical" href="https://ferrsir.github.io/options-pricer/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Options Premium Pricer">
+<meta property="og:description" content="Black-Scholes-Merton, American binomial tree, Longstaff-Schwartz, Greeks, implied volatility and volatility surfaces. Enter any premium and see how everything reacts.">
+<meta property="og:url" content="https://ferrsir.github.io/options-pricer/">
+<meta property="og:image" content="https://ferrsir.github.io/options-pricer/assets/ndx_surface.png">
+<meta property="og:image:alt" content="NASDAQ-100 implied volatility surface">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23101a30'/%3E%3Cpath d='M5 24 L13 12 L19 18 L27 7' fill='none' stroke='%23f5b13d' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=4">
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
 </head>
 <body>
-<header class="top">
-  <div class="brand">
-    <div class="logo" aria-hidden="true"><svg viewBox="0 0 32 32" width="26" height="26"><path d="M5 24 L13 12 L19 18 L27 7" fill="none" stroke="#f5a623" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-    <div>
-      <h1>Options Premium Pricer</h1>
-      <p>Black-Scholes-Merton · American binomial tree · Longstaff-Schwartz · Greeks · Vol surface</p>
-    </div>
-  </div>
-  <div class="top-links">
-    <span class="pill" id="dataPill" title="Where market data comes from">data: checking…</span>
-    <a href="#guide" id="guideLink">New here? Read the guide</a>
-    <a href="https://github.com/Ferrsir/options-pricer" target="_blank" rel="noopener">GitHub</a>
-  </div>
+<a class="skip" href="#main">Skip to results</a>
+
+<!-- icon sprite (Lucide-style strokes) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-dash" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+    <symbol id="i-scale" viewBox="0 0 24 24"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+    <symbol id="i-trend" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></symbol>
+    <symbol id="i-branch" viewBox="0 0 24 24"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
+    <symbol id="i-mountain" viewBox="0 0 24 24"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+    <symbol id="i-sigma" viewBox="0 0 24 24"><path d="M18 7V5a1 1 0 0 0-1-1H6.5a.5.5 0 0 0-.4.8l4.5 6a2 2 0 0 1 0 2.4l-4.5 6a.5.5 0 0 0 .4.8H17a1 1 0 0 0 1-1v-2"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></symbol>
+  </defs>
+</svg>
+
+<header class="top glass">
+  <a class="brand" href="./" aria-label="Options Premium Pricer, home">
+    <span class="logo" aria-hidden="true"><svg viewBox="0 0 32 32" width="24" height="24"><path d="M5 24 L13 12 L19 18 L27 7" fill="none" stroke="#f5b13d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <span class="brand-text"><b>Options Premium Pricer</b><small>Black-Scholes · American tree · LSMC · Greeks · Vol surface</small></span>
+  </a>
+  <nav class="top-links" aria-label="Site">
+    <span class="pill" id="dataPill" title="Where market data comes from"><i class="dot" aria-hidden="true"></i><span id="dataPillText">checking data…</span></span>
+    <a class="btn ghost sm" href="#guide" id="guideLink"><svg class="ic"><use href="#i-book"/></svg><span>Guide</span></a>
+    <a class="btn ghost sm icon-only" href="https://github.com/Ferrsir/options-pricer" target="_blank" rel="noopener" aria-label="View source on GitHub"><svg class="ic"><use href="#i-github"/></svg></a>
+  </nav>
 </header>
 
-<main class="layout">
-  <aside class="panel inputs" aria-label="Inputs">
-    <section>
-      <h2>Underlying</h2>
-      <div class="row">
-        <input id="ticker" placeholder="Ticker — AAPL, SPY, NDX…" autocomplete="off" spellcheck="false" aria-label="Ticker">
-        <button id="loadTicker" class="btn primary">Load</button>
-      </div>
-      <p id="tickerStatus" class="hint" role="status">Pull spot, rate, dividend yield and historical vol from Yahoo Finance.</p>
-      <div id="volChips" class="chips" hidden></div>
-      <div id="chainPick" hidden>
-        <label>Expiry <select id="expirySel"></select></label>
-        <label>Contract <select id="strikeSel"></select></label>
-      </div>
-    </section>
+<main class="layout" id="layout">
+  <aside class="panel inputs glass" aria-label="Inputs" id="inputsPanel">
 
-    <section>
-      <h2>Contract</h2>
-      <div class="seg" role="group" aria-label="Option type">
-        <button data-k="type" data-v="call" class="on">Call</button>
-        <button data-k="type" data-v="put">Put</button>
+    <details class="acc" open>
+      <summary><svg class="ic"><use href="#i-search"/></svg>Underlying<svg class="ic chev"><use href="#i-chev"/></svg></summary>
+      <div class="acc-body">
+        <div class="row">
+          <label class="sr" for="ticker">Ticker</label>
+          <input id="ticker" class="grow" placeholder="Ticker: AAPL, SPY, NDX…" autocomplete="off" autocapitalize="characters" spellcheck="false">
+          <button id="loadTicker" class="btn primary">Load</button>
+        </div>
+        <p id="tickerStatus" class="hint" role="status">Pull spot, rate, dividend yield and historical vol from Yahoo Finance.</p>
+        <div id="volChips" class="chips" hidden></div>
+        <div id="chainPick" hidden>
+          <label class="fld"><span class="lbl">Expiry</span><select id="expirySel"></select></label>
+          <label class="fld"><span class="lbl">Contract</span><select id="strikeSel"></select></label>
+        </div>
       </div>
-      <div class="seg" role="group" aria-label="Position side">
-        <button data-k="side" data-v="long" class="on">Long (buy)</button>
-        <button data-k="side" data-v="short">Short (sell)</button>
-      </div>
-      <div class="seg" role="group" aria-label="Exercise style">
-        <button data-k="style" data-v="european" class="on">European</button>
-        <button data-k="style" data-v="american" >American</button>
-      </div>
-      <div class="grid2">
-        <label>Spot S<input id="S" type="number" step="any" value="100"></label>
-        <label>Strike K<input id="K" type="number" step="any" value="100"></label>
-        <label>Days to expiry<input id="days" type="number" step="any" value="365"></label>
-        <label>Volatility σ %<input id="sigma" type="number" step="any" value="20"></label>
-        <label>Risk-free rate r %<input id="r" type="number" step="any" value="5"></label>
-        <label>Dividend yield q %<input id="q" type="number" step="any" value="0"></label>
-      </div>
-      <label class="slider">Tree steps <output id="stepsOut">500</output>
-        <input id="steps" type="range" min="20" max="2000" step="10" value="500">
-      </label>
-    </section>
+    </details>
 
-    <section id="premSection">
-      <h2>Your premium <span class="opt">per share, what you pay or collect</span></h2>
-      <div class="row">
-        <input id="premium" type="number" step="any" min="0" placeholder="Type a premium to test…" aria-label="Your premium per share">
+    <details class="acc" open>
+      <summary><svg class="ic"><use href="#i-sliders"/></svg>Contract<svg class="ic chev"><use href="#i-chev"/></svg></summary>
+      <div class="acc-body">
+        <div class="seg-row">
+          <div class="seg" role="group" aria-label="Option type">
+            <button type="button" data-k="type" data-v="call" class="on" aria-pressed="true">Call</button>
+            <button type="button" data-k="type" data-v="put" aria-pressed="false">Put</button>
+          </div>
+          <div class="seg" role="group" aria-label="Position side">
+            <button type="button" data-k="side" data-v="long" class="on" aria-pressed="true">Long</button>
+            <button type="button" data-k="side" data-v="short" aria-pressed="false">Short</button>
+          </div>
+        </div>
+        <div class="seg" role="group" aria-label="Exercise style">
+          <button type="button" data-k="style" data-v="european" class="on" aria-pressed="true">European</button>
+          <button type="button" data-k="style" data-v="american" aria-pressed="false">American</button>
+        </div>
+        <div class="grid2">
+          <div class="fld"><div class="lbl"><label for="S">Spot S</label><button type="button" class="tip" data-tip="Spot: today’s price of the stock or index." aria-label="About spot"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in pre"><input id="S" type="number" inputmode="decimal" step="any" value="100"><i class="u">$</i></span></div>
+          <div class="fld"><div class="lbl"><label for="K">Strike K</label><button type="button" class="tip" data-tip="Strike: the fixed price in the contract at which you may buy (call) or sell (put)." aria-label="About strike"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in pre"><input id="K" type="number" inputmode="decimal" step="any" value="100"><i class="u">$</i></span></div>
+          <div class="fld"><div class="lbl"><label for="days">Days to expiry</label><button type="button" class="tip" data-tip="Days until the option expires. The math converts to years (days ÷ 365)." aria-label="About days to expiry"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in"><input id="days" type="number" inputmode="decimal" step="any" value="365"><i class="u">d</i></span></div>
+          <div class="fld"><div class="lbl"><label for="sigma">Volatility σ</label><button type="button" class="tip" data-tip="Volatility: how much the price moves per year. 20% means a typical yearly swing of about ±20%. More volatility means a more expensive option." aria-label="About volatility"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in"><input id="sigma" type="number" inputmode="decimal" step="any" value="20"><i class="u">%</i></span></div>
+          <div class="fld"><div class="lbl"><label for="r">Risk-free rate r</label><button type="button" class="tip" data-tip="What a safe deposit earns per year (Yahoo fill uses the 13-week T-bill). It discounts the strike you pay later." aria-label="About the risk-free rate"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in"><input id="r" type="number" inputmode="decimal" step="any" value="5"><i class="u">%</i></span></div>
+          <div class="fld"><div class="lbl"><label for="q">Dividend yield q</label><button type="button" class="tip" data-tip="Cash the stock pays out per year as a % of its price. Option holders don’t receive it, so a higher yield lowers call prices and raises put prices." aria-label="About dividend yield"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in"><input id="q" type="number" inputmode="decimal" step="any" value="0"><i class="u">%</i></span></div>
+        </div>
+        <div class="fld slider"><div class="lbl"><label for="steps">Tree steps</label><button type="button" class="tip" data-tip="Number of up/down steps in the binomial tree. More steps get closer to Black-Scholes but run slower." aria-label="About tree steps"><svg class="ic sm"><use href="#i-info"/></svg></button><output id="stepsOut" for="steps">500</output></div><input id="steps" type="range" min="20" max="2000" step="10" value="500"></div>
       </div>
-      <input id="premSlider" class="premslide" type="range" min="0" max="10" step="0.01" value="0" aria-label="Drag to change the premium">
-      <div class="chips" id="premChips">
-        <button class="chip" data-p="model" title="Set the premium to the model price at your σ">= model</button>
-        <button class="chip" data-p="-0.25">−25%</button>
-        <button class="chip" data-p="-0.1">−10%</button>
-        <button class="chip" data-p="0.1">+10%</button>
-        <button class="chip" data-p="0.25">+25%</button>
-        <button class="chip" data-p="clear">clear</button>
-      </div>
-      <label class="checkline"><input type="checkbox" id="lockIv"> Lock σ to this premium’s implied vol</label>
-      <div id="ivReadout" class="ivbox" hidden></div>
-    </section>
+    </details>
 
-    <section>
-      <h2>Data API <span class="opt">optional</span></h2>
-      <div class="row">
-        <input id="apiBase" placeholder="http://localhost:8000" aria-label="Data API base URL">
-        <button id="saveApi" class="btn">Save</button>
+    <details class="acc" open id="premSection">
+      <summary><svg class="ic"><use href="#i-scale"/></svg>Your premium<svg class="ic chev"><use href="#i-chev"/></svg></summary>
+      <div class="acc-body">
+        <div class="fld"><div class="lbl"><label for="premium">Price you’re offered, per share</label><button type="button" class="tip" data-tip="The option’s price per share (a contract is 100 shares). Enter what you are being offered to see whether it is cheap or rich versus the model." aria-label="About premium"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in pre"><input id="premium" type="number" inputmode="decimal" step="any" min="0" placeholder="Type a premium to test…"><i class="u">$</i></span></div>
+        <input id="premSlider" class="premslide" type="range" min="0" max="10" step="0.01" value="0" aria-label="Drag to change the premium">
+        <div class="chips" id="premChips">
+          <button type="button" class="chip" data-p="model" title="Set the premium to the model price at your σ">= model</button>
+          <button type="button" class="chip" data-p="-0.25">−25%</button>
+          <button type="button" class="chip" data-p="-0.1">−10%</button>
+          <button type="button" class="chip" data-p="0.1">+10%</button>
+          <button type="button" class="chip" data-p="0.25">+25%</button>
+          <button type="button" class="chip" data-p="clear">Clear</button>
+        </div>
+        <label class="checkline"><input type="checkbox" id="lockIv"><span>Lock σ to this premium’s implied vol</span></label>
+        <div id="ivReadout" class="ivbox" hidden></div>
       </div>
-      <p class="hint">Live option chains for any ticker need <code>python -m pricer serve</code> (see README). Without it the site uses bundled Yahoo snapshots.</p>
-    </section>
+    </details>
+
+    <details class="acc" id="apiSection">
+      <summary><svg class="ic"><use href="#i-plug"/></svg>Data API <em>optional</em><svg class="ic chev"><use href="#i-chev"/></svg></summary>
+      <div class="acc-body">
+        <div class="row">
+          <input id="apiBase" class="grow" placeholder="http://localhost:8000" aria-label="Data API base URL">
+          <button id="saveApi" class="btn">Save</button>
+        </div>
+        <p class="hint">Live option chains for any ticker need <code>python -m pricer serve</code> (see README). Without it the site uses bundled Yahoo snapshots.</p>
+      </div>
+    </details>
   </aside>
 
-  <section class="content">
+  <section class="content" id="main" tabindex="-1">
+    <div class="summary" id="summaryBar">
+      <div class="sum-line" id="summaryLine"></div>
+      <button type="button" class="btn ghost sm" id="shareBtn" title="Copy a link that restores these inputs"><svg class="ic"><use href="#i-link"/></svg><span>Copy link</span></button>
+    </div>
+
+    <section class="welcome glass" id="welcome" hidden aria-labelledby="welcomeTitle">
+      <button type="button" class="x" id="welcomeClose" aria-label="Dismiss the start-here guide"><svg class="ic"><use href="#i-x"/></svg></button>
+      <h2 id="welcomeTitle">Price an option in three steps</h2>
+      <ol class="steps">
+        <li><b>Set the contract</b><span>Type the numbers on the left, or load a ticker from Yahoo Finance.</span></li>
+        <li><b>Enter a premium</b><span>Type the price you are being offered. See if it is cheap or rich, and the volatility it implies.</span></li>
+        <li><b>Explore the tabs</b><span>Greeks, payoff, what-if P&amp;L, the volatility surface. Every term is explained in the Guide.</span></li>
+      </ol>
+      <div class="row wrap">
+        <span class="lbl-inline"><svg class="ic"><use href="#i-zap"/></svg>Try an example</span>
+        <button type="button" class="chip" data-preset="slide">Class example: ATM call</button>
+        <button type="button" class="chip" data-preset="amput">American put: 6.09</button>
+        <button type="button" class="chip" data-preset="deep">Model 105 vs market 150</button>
+        <a class="chip link" href="#guide" id="welcomeGuide">Read the guide</a>
+      </div>
+    </section>
+
     <div id="error" class="error" role="alert" hidden></div>
 
     <div id="premBanner" class="banner" hidden></div>
     <div class="hero" id="hero"></div>
 
-    <nav class="tabs" role="tablist">
-      <button role="tab" data-tab="overview" class="on">Overview</button>
-      <button role="tab" data-tab="impact">Premium impact</button>
-      <button role="tab" data-tab="greeks">Greeks</button>
-      <button role="tab" data-tab="payoff">Payoff</button>
-      <button role="tab" data-tab="whatif">What-if</button>
-      <button role="tab" data-tab="tree">Tree &amp; LSMC</button>
-      <button role="tab" data-tab="surface">Vol surface</button>
-      <button role="tab" data-tab="checks">Sanity checks</button>
-      <button role="tab" data-tab="guide">Guide</button>
-      <button role="tab" data-tab="how">How it works</button>
+    <nav class="tabs glass" role="tablist" aria-label="Views" id="tabsNav">
+      <button role="tab" id="tabbtn-overview" aria-controls="tab-overview" aria-selected="true" data-tab="overview" class="on" title="Overview: prices, models and Greeks"><svg class="ic"><use href="#i-dash"/></svg><span>Overview</span></button>
+      <button role="tab" id="tabbtn-impact" aria-controls="tab-impact" aria-selected="false" tabindex="-1" data-tab="impact" title="Premium impact: how Greeks change when the market price differs from the model"><svg class="ic"><use href="#i-scale"/></svg><span>Impact</span></button>
+      <button role="tab" id="tabbtn-greeks" aria-controls="tab-greeks" aria-selected="false" tabindex="-1" data-tab="greeks" title="Greeks: delta, gamma, vega, theta, rho"><svg class="ic"><use href="#i-activity"/></svg><span>Greeks</span></button>
+      <button role="tab" id="tabbtn-payoff" aria-controls="tab-payoff" aria-selected="false" tabindex="-1" data-tab="payoff" title="Payoff: profit and loss at expiry and today"><svg class="ic"><use href="#i-trend"/></svg><span>Payoff</span></button>
+      <button role="tab" id="tabbtn-whatif" aria-controls="tab-whatif" aria-selected="false" tabindex="-1" data-tab="whatif" title="What-if: move spot, volatility and time"><svg class="ic"><use href="#i-sliders"/></svg><span>What-if</span></button>
+      <button role="tab" id="tabbtn-tree" aria-controls="tab-tree" aria-selected="false" tabindex="-1" data-tab="tree" title="Tree and LSMC: convergence and early exercise"><svg class="ic"><use href="#i-branch"/></svg><span>Tree</span></button>
+      <button role="tab" id="tabbtn-surface" aria-controls="tab-surface" aria-selected="false" tabindex="-1" data-tab="surface" title="Volatility surface"><svg class="ic"><use href="#i-mountain"/></svg><span>Surface</span></button>
+      <button role="tab" id="tabbtn-checks" aria-controls="tab-checks" aria-selected="false" tabindex="-1" data-tab="checks" title="Sanity checks from the slides"><svg class="ic"><use href="#i-shield"/></svg><span>Checks</span></button>
+      <button role="tab" id="tabbtn-guide" aria-controls="tab-guide" aria-selected="false" tabindex="-1" data-tab="guide" title="Plain-English guide"><svg class="ic"><use href="#i-book"/></svg><span>Guide</span></button>
+      <button role="tab" id="tabbtn-how" aria-controls="tab-how" aria-selected="false" tabindex="-1" data-tab="how" title="Theory: how it works"><svg class="ic"><use href="#i-sigma"/></svg><span>Theory</span></button>
     </nav>
 
-    <div class="tabpane on" id="tab-overview">
-      <div class="card">
+    <div class="tabpane on" id="tab-overview" role="tabpanel" aria-labelledby="tabbtn-overview">
+      <div class="card glass">
         <h3>Pricing models</h3>
-        <table id="modelTable" class="tbl"></table>
+        <div class="tbl-wrap"><table id="modelTable" class="tbl"></table></div>
         <div class="row lsmcrow">
           <label class="inline">LSMC paths
             <select id="lsmcPaths"><option>10000</option><option selected>20000</option><option>50000</option><option>100000</option></select>
@@ -127,38 +193,39 @@
           <span id="lsmcStatus" class="hint"></span>
         </div>
       </div>
-      <div class="card" id="impactCardOverview" hidden>
+      <div class="card glass" id="impactCardOverview" hidden>
         <h3>Your premium vs the model <span class="opt">what changes when the market price differs from the model price</span></h3>
-        <div id="impactTableOverview"></div>
-        <p class="row" style="margin-top:10px"><button class="btn" id="toImpact">See it across a range of premiums →</button></p>
+        <div class="tbl-wrap" id="impactTableOverview"></div>
+        <p class="row" style="margin-top:12px"><button class="btn" id="toImpact">See it across a range of premiums →</button></p>
       </div>
-      <div class="card">
+      <div class="card glass">
         <h3>Greeks <span class="opt" id="greeksNote"></span></h3>
-        <table id="greekTable" class="tbl"></table>
+        <div class="tbl-wrap"><table id="greekTable" class="tbl"></table></div>
       </div>
     </div>
 
-    <div class="tabpane" id="tab-impact">
-      <div class="card" id="impactEmpty" hidden>
+    <div class="tabpane" id="tab-impact" role="tabpanel" aria-labelledby="tabbtn-impact">
+      <div class="card glass" id="impactEmpty" hidden>
         <h3>Enter a premium to see its impact</h3>
-        <p class="hint">Type a premium in the <b>Your premium</b> box on the left (for example a price far above what the model says). Everything here compares <b>your model’s volatility</b> with the <b>volatility your premium implies</b>.</p>
+        <p class="hint">Type a premium in the <b>Your premium</b> box (for example a price far above what the model says). Everything here compares <b>your model’s volatility</b> with the <b>volatility your premium implies</b>.</p>
+        <p class="row"><button type="button" class="chip" data-preset="deep">Try: model 105 vs market 150</button></p>
       </div>
       <div id="impactBody">
-        <div class="card">
+        <div class="card glass">
           <h3>Model vs market</h3>
-          <div id="impactTable"></div>
+          <div class="tbl-wrap" id="impactTable"></div>
           <div id="impactNotes" class="prose" style="margin-top:12px"></div>
         </div>
-        <div class="card">
+        <div class="card glass">
           <h3>How each number reacts as the premium changes</h3>
-          <p class="hint" style="margin-top:-6px">Every point on these curves re-solves the implied vol for that premium and recomputes the Greeks at it (Black-Scholes). The <span style="color:#cbd2dc">white dashed line</span> is the model price at your σ; the <span style="color:#f5a623">orange line</span> is your premium.</p>
+          <p class="hint" style="margin-top:-6px">Every point on these curves re-solves the implied vol for that premium and recomputes the Greeks at it (Black-Scholes). The <span class="key-white">white dashed line</span> is the model price at your σ; the <span class="key-amber">amber line</span> is your premium.</p>
           <div id="impactGrid" class="greekgrid"></div>
         </div>
       </div>
     </div>
 
-    <div class="tabpane" id="tab-greeks">
-      <div class="card">
+    <div class="tabpane" id="tab-greeks" role="tabpanel" aria-labelledby="tabbtn-greeks">
+      <div class="card glass">
         <div class="row wrap">
           <label class="inline">X axis
             <select id="greekX"><option value="spot">Spot price</option><option value="time">Days to expiry</option><option value="vol">Volatility</option></select>
@@ -167,7 +234,7 @@
         </div>
         <div id="greekGrid" class="greekgrid"></div>
       </div>
-      <div class="card">
+      <div class="card glass">
         <div class="row wrap">
           <h3 style="margin:0">Greek surface</h3>
           <label class="inline">Greek
@@ -178,15 +245,15 @@
       </div>
     </div>
 
-    <div class="tabpane" id="tab-payoff">
-      <div class="card">
+    <div class="tabpane" id="tab-payoff" role="tabpanel" aria-labelledby="tabbtn-payoff">
+      <div class="card glass">
         <div id="payoffPlot" class="plot"></div>
         <p class="hint" id="payoffNote"></p>
       </div>
     </div>
 
-    <div class="tabpane" id="tab-whatif">
-      <div class="card">
+    <div class="tabpane" id="tab-whatif" role="tabpanel" aria-labelledby="tabbtn-whatif">
+      <div class="card glass">
         <h3>What happens to your position?</h3>
         <p class="hint" style="margin-top:-6px">You entered at your premium. Move the sliders to see the option’s value and your profit or loss after spot, volatility and time change.</p>
         <div class="wi-controls">
@@ -196,26 +263,26 @@
         </div>
         <div id="wiStats" class="hero wi-stats"></div>
       </div>
-      <div class="card"><h3>Where the P&amp;L comes from</h3><div id="wiWaterfall" class="plot"></div>
+      <div class="card glass"><h3>Where the P&amp;L comes from</h3><div id="wiWaterfall" class="plot"></div>
         <p class="hint">Edge at entry = model value − your premium (from your side). Then the Greeks explain the move: Δ·ΔS, ½Γ·ΔS², vega·Δσ, Θ·Δt. “Other” is the higher-order remainder.</p></div>
-      <div class="card">
+      <div class="card glass">
         <div class="row wrap"><h3 style="margin:0">P&amp;L heat map</h3>
           <label class="inline">Vertical axis <select id="wiHeat"><option value="days">Days passed</option><option value="vol">Volatility change</option></select></label></div>
         <div id="wiHeatmap" class="plot tall"></div>
         <p class="hint">Green = profit, red = loss, per share, valued with Black-Scholes. The dotted vertical line is where you are now.</p></div>
     </div>
 
-    <div class="tabpane" id="tab-tree">
-      <div class="card"><h3>Convergence to Black-Scholes-Merton</h3><div id="convPlot" class="plot"></div>
+    <div class="tabpane" id="tab-tree" role="tabpanel" aria-labelledby="tabbtn-tree">
+      <div class="card glass"><h3>Convergence to Black-Scholes-Merton</h3><div id="convPlot" class="plot"></div>
         <p class="hint">European tree error shrinks roughly like 1/steps (with a saw-tooth from how the strike sits on the lattice). The American curve sits above it by the early-exercise premium.</p></div>
-      <div class="card"><h3>Early-exercise boundary</h3><div id="boundaryPlot" class="plot"></div>
+      <div class="card glass"><h3>Early-exercise boundary</h3><div id="boundaryPlot" class="plot"></div>
         <p class="hint" id="boundaryNote"></p></div>
     </div>
 
-    <div class="tabpane" id="tab-surface">
-      <div class="card">
+    <div class="tabpane" id="tab-surface" role="tabpanel" aria-labelledby="tabbtn-surface">
+      <div class="card glass">
         <div class="row wrap">
-          <input id="surfTicker" placeholder="Ticker (NDX, SPY, AAPL…)" style="max-width:220px" aria-label="Surface ticker">
+          <input id="surfTicker" placeholder="Ticker (NDX, SPY, AAPL…)" style="max-width:240px" aria-label="Surface ticker">
           <button id="loadSurface" class="btn primary">Build surface</button>
           <span id="surfStatus" class="hint"></span>
         </div>
@@ -223,25 +290,25 @@
         <div id="smilePlot" class="plot"></div>
         <p class="hint">Pipeline: log-moneyness k = ln(K/S) → OTM quotes → Black-Scholes implied vols → Savitzky-Golay smoothing per expiry → two-stage PCHIP interpolation (strike, then total variance in time). The red dashed line marks at-the-money.</p>
       </div>
-      <div class="card">
+      <div class="card glass">
         <h3>Python render</h3>
-        <img class="render" src="assets/ndx_surface.png" alt="NASDAQ-100 implied volatility surface rendered with matplotlib">
+        <img class="render" src="assets/ndx_surface.png" alt="NASDAQ-100 implied volatility surface rendered with matplotlib" loading="lazy" width="1649" height="1450">
         <p class="hint">Generated with <code>python -m pricer surface NDX</code>. Same pipeline, static picture for slides.</p>
       </div>
     </div>
 
-    <div class="tabpane" id="tab-checks">
-      <div class="card"><h3>HW 1 sanity checks</h3>
+    <div class="tabpane" id="tab-checks" role="tabpanel" aria-labelledby="tabbtn-checks">
+      <div class="card glass"><h3>HW 1 sanity checks</h3>
         <p class="hint">From the slide: “If one fails, stop and find out why.” These run live against your current inputs.</p>
         <div id="checkList"></div></div>
     </div>
 
-    <div class="tabpane" id="tab-guide">
-      <div class="card prose" id="guideText"><p class="hint">Loading guide…</p></div>
+    <div class="tabpane" id="tab-guide" role="tabpanel" aria-labelledby="tabbtn-guide">
+      <div class="card glass prose" id="guideText"><p class="hint">Loading guide…</p></div>
     </div>
 
-    <div class="tabpane" id="tab-how">
-      <div class="card prose" id="howText"></div>
+    <div class="tabpane" id="tab-how" role="tabpanel" aria-labelledby="tabbtn-how">
+      <div class="card glass prose" id="howText"></div>
     </div>
   </section>
 </main>
@@ -249,6 +316,17 @@
 <footer class="foot">
   Educational tool built for Traders@SMU HW 1. Not investment advice. Market data © Yahoo Finance and may be delayed or inaccurate.
 </footer>
-<script type="module" src="js/app.js?v=3"></script>
+
+<!-- mobile quick bar -->
+<div class="mbar glass" id="mbar" hidden>
+  <div class="mb-val"><small id="mbLabel">Premium</small><b id="mbPrice">—</b></div>
+  <button type="button" class="btn sm" id="mbInputs"><svg class="ic"><use href="#i-sliders"/></svg>Inputs</button>
+  <button type="button" class="btn primary sm" id="mbResults"><svg class="ic"><use href="#i-dash"/></svg>Results</button>
+</div>
+
+<div id="tooltip" role="tooltip" aria-hidden="true"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="js/app.js?v=4"></script>
 </body>
 </html>

@@ -1,9 +1,12 @@
-import * as P from './pricing.js?v=3';
-import * as D from './data.js?v=3';
+import * as P from './pricing.js?v=4';
+import * as D from './data.js?v=4';
 
 const $ = (id) => document.getElementById(id);
 const state = { type: 'call', side: 'long', style: 'european', chain: null, chainExpiry: null, ticker: '', tab: 'overview', lsmc: null };
-const COLORS = ['#f5a623', '#a9cf3f', '#3fae78', '#4aa3df', '#c77dff'];
+const COLORS = ['#f5b13d', '#a9cf3f', '#3fae78', '#60a5fa', '#c4a1ff'];
+const GRID = 'rgba(255,255,255,0.07)', ZERO = 'rgba(255,255,255,0.22)', TXT = '#cbd5e6';
+const FONT = '"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif';
+const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const fmt = (x, d = 4) => (Number.isFinite(x) ? (Math.abs(x) < 0.5 * 10 ** -d ? 0 : x).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—'); // no '-0.0000'
 const pct = (x, d = 2) => (Number.isFinite(x) ? (x * 100).toFixed(d) + '%' : '—');
 const sgn = () => (state.side === 'long' ? 1 : -1);
@@ -26,12 +29,13 @@ const cssv = (n) => getComputedStyle(document.documentElement).getPropertyValue(
 function baseLayout(extra = {}) {
   return Object.assign({
     paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
-    font: { color: '#cbd2dc', size: 12 }, margin: { l: 56, r: 16, t: 34, b: 44 },
-    xaxis: { gridcolor: '#252c36', zerolinecolor: '#3a4451' }, yaxis: { gridcolor: '#252c36', zerolinecolor: '#3a4451' },
+    font: { color: TXT, size: 12, family: FONT }, margin: { l: 56, r: 16, t: 34, b: 44 },
+    xaxis: { gridcolor: GRID, zerolinecolor: ZERO, linecolor: GRID }, yaxis: { gridcolor: GRID, zerolinecolor: ZERO, linecolor: GRID },
     legend: { orientation: 'h', y: -0.22 },
+    hoverlabel: { bgcolor: 'rgba(9,14,27,0.96)', bordercolor: 'rgba(255,255,255,0.25)', font: { family: FONT, color: '#f2f5fa', size: 12 } },
   }, extra);
 }
-const draw = (id, data, layout, config = {}) => Plotly.react(id, data, layout, { responsive: true, displaylogo: false, ...config });
+const draw = (id, data, layout, config = {}) => Plotly.react(id, data, layout, { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d'], ...config });
 const linspace = (a, b, n) => Array.from({ length: n }, (_, i) => a + ((b - a) * i) / (n - 1));
 
 // ---------------------------------------------------------------- compute + render
@@ -64,7 +68,7 @@ function renderHero() {
     ['main', `${p.style === 'american' ? 'American' : 'European'} ${p.kind} premium`, fmt(price, 4), state.side === 'long' ? 'you pay per share' : 'you collect per share'],
     ['', 'Intrinsic value', fmt(c.intrinsic, 4), c.intrinsic > 0 ? 'in the money' : 'out of the money'],
     ['', 'Time value', fmt(tv, 4), `${((tv / price) * 100 || 0).toFixed(0)}% of premium`],
-    ['', 'Breakeven', fmt(be, 2), `at expiry (${pct((be - p.S) / p.S, 1)} from spot)`],
+    ['', 'Breakeven (model)', fmt(be, 2), `at expiry (${pct((be - p.S) / p.S, 1)} from spot)`],
     ['', 'P(finish ITM)', pct(probItm, 1), 'risk-neutral, N(±d2)'],
   ];
   $('hero').innerHTML = cards.map(([cls, k, v, s]) => `<div class="stat ${cls}"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join('');
@@ -134,7 +138,7 @@ function renderGreeks() {
   for (const name of Object.keys(GREEK_LABELS)) {
     const fn = greekFn(name, p);
     const traces = series.map((s, i) => ({ x: xs, y: xs.map((x) => fn(...s.f(x))), name: s.name, mode: 'lines', line: { color: COLORS[i % COLORS.length], width: 2 }, showlegend: name === 'delta' }));
-    const layout = baseLayout({ title: { text: GREEK_LABELS[name], font: { size: 13 } }, margin: { l: 46, r: 8, t: 30, b: 36 }, xaxis: { title: { text: xTitle, font: { size: 11 } }, gridcolor: '#252c36' }, legend: { orientation: 'h', y: 1.28, font: { size: 10 } }, shapes: vline ? [{ type: 'line', x0: vline, x1: vline, yref: 'paper', y0: 0, y1: 1, line: { color: '#e5484d', dash: 'dash', width: 1 } }] : [] });
+    const layout = baseLayout({ title: { text: GREEK_LABELS[name], font: { size: 13 } }, margin: { l: 46, r: 8, t: 30, b: 36 }, xaxis: { title: { text: xTitle, font: { size: 11 } }, gridcolor: GRID }, legend: { x: 0.98, y: 0.05, xanchor: 'right', yanchor: 'bottom', bgcolor: 'rgba(9,14,27,0.55)', font: { size: 10 } }, shapes: vline ? [{ type: 'line', x0: vline, x1: vline, yref: 'paper', y0: 0, y1: 1, line: { color: '#e5484d', dash: 'dash', width: 1 } }] : [] });
     draw('g-' + name, traces, layout);
   }
   renderGreekSurface();
@@ -151,7 +155,7 @@ function renderGreekSurface() {
 
 const IV_SCALE = [[0, '#0b1f5c'], [0.17, '#1b4f9c'], [0.34, '#1a8a9c'], [0.5, '#3fae78'], [0.68, '#a9cf3f'], [0.84, '#f3c334'], [1, '#f59b2a']];
 function sceneStyle(x, y, z) {
-  const ax = (t) => ({ title: { text: t }, gridcolor: '#2b323c', backgroundcolor: '#0e1114', showbackground: true, zerolinecolor: '#3a4451', color: '#cbd2dc' });
+  const ax = (t) => ({ title: { text: t }, gridcolor: '#26324b', backgroundcolor: '#0c1322', showbackground: true, zerolinecolor: '#3a4a6b', color: TXT }); // solid colours: the 3-D engine ignores alpha
   return { xaxis: ax(x), yaxis: ax(y), zaxis: ax(z), camera: { eye: { x: 1.6, y: -1.6, z: 0.9 } }, aspectmode: 'manual', aspectratio: { x: 1.3, y: 1, z: 0.7 } };
 }
 
@@ -163,11 +167,11 @@ function renderPayoff() {
   const at = (T) => xs.map((x) => s * ((T <= 0 ? P.intrinsic(x, p.K, p.kind) : P.bsmPrice(x, p.K, T, p.r, p.sigma, p.q, p.kind)) - paid));
   const be = p.kind === 'call' ? p.K + paid : p.K - paid;
   const traces = [
-    { x: xs, y: at(0), name: 'At expiry', line: { color: '#f5a623', width: 2.5 } },
+    { x: xs, y: at(0), name: 'At expiry', line: { color: COLORS[0], width: 2.5 } },
     { x: xs, y: at(p.T / 2), name: 'Halfway to expiry', line: { color: '#a9cf3f', width: 1.6, dash: 'dot' } },
     { x: xs, y: at(p.T), name: 'Today', line: { color: '#4aa3df', width: 2 } },
   ].map((t) => ({ ...t, mode: 'lines' }));
-  draw('payoffPlot', traces, baseLayout({ title: `${state.side} ${p.kind} K=${p.K}, premium ${fmt(paid, 2)}`, xaxis: { title: 'Underlying price', gridcolor: '#252c36' }, yaxis: { title: 'Profit / loss per share', gridcolor: '#252c36', zerolinecolor: '#5a6572' },
+  draw('payoffPlot', traces, baseLayout({ title: `${state.side} ${p.kind} K=${p.K}, premium ${fmt(paid, 2)}`, xaxis: { title: 'Underlying price', gridcolor: GRID }, yaxis: { title: 'Profit / loss per share', gridcolor: GRID, zerolinecolor: ZERO },
     shapes: [{ type: 'line', x0: p.S, x1: p.S, yref: 'paper', y0: 0, y1: 1, line: { color: '#e5484d', dash: 'dash', width: 1 } }, { type: 'line', x0: be, x1: be, yref: 'paper', y0: 0, y1: 1, line: { color: '#3fae78', dash: 'dot', width: 1 } }],
     annotations: [{ x: p.S, yref: 'paper', y: 1, text: 'spot', showarrow: false, font: { color: '#e5484d' } }, { x: be, yref: 'paper', y: 0.94, text: `breakeven ${be.toFixed(2)}`, showarrow: false, font: { color: '#3fae78' }, xanchor: 'left' }] }));
   const maxLoss = s === 1 ? `${fmt(paid, 2)} (the premium)` : (p.kind === 'call' ? 'unbounded' : `${fmt(p.K - paid, 2)}`);
@@ -181,10 +185,10 @@ function renderTree() {
   const n = rows.map((r) => r.steps);
   draw('convPlot', [
     { x: n, y: rows.map((r) => r.european), name: 'European tree', mode: 'lines+markers', line: { color: '#4aa3df' } },
-    { x: n, y: rows.map((r) => r.american), name: 'American tree', mode: 'lines+markers', line: { color: '#f5a623' } },
+    { x: n, y: rows.map((r) => r.american), name: 'American tree', mode: 'lines+markers', line: { color: COLORS[0] } },
     { x: n, y: rows.map(() => rows[0].bsm), name: 'BSM closed form', mode: 'lines', line: { color: '#3fae78', dash: 'dash' } },
     { x: n, y: rows.map((r) => Math.abs(r.error) + 1e-12), name: '|Euro tree − BSM| (right axis)', mode: 'lines+markers', yaxis: 'y2', line: { color: '#a9cf3f', dash: 'dot' } },
-  ], baseLayout({ xaxis: { type: 'log', title: 'Tree steps', gridcolor: '#252c36' }, yaxis: { title: 'Premium', gridcolor: '#252c36' }, yaxis2: { overlaying: 'y', side: 'right', type: 'log', title: 'Abs. error', showgrid: false }, margin: { l: 56, r: 60, t: 20, b: 60 } }));
+  ], baseLayout({ xaxis: { type: 'log', title: 'Tree steps', gridcolor: GRID }, yaxis: { title: 'Premium', gridcolor: GRID }, yaxis2: { overlaying: 'y', side: 'right', type: 'log', title: 'Abs. error', showgrid: false }, margin: { l: 56, r: 60, t: 20, b: 60 } }));
 
   const b = c.am;
   let t = [], sPts = [];
@@ -195,13 +199,13 @@ function renderTree() {
   if (t.length) {
     const inside = p.kind === 'put' ? 'below' : 'above';
     draw('boundaryPlot', [
-      { x: t, y: sPts, mode: 'lines', name: 'Critical spot', line: { color: '#f5a623', width: 2 }, fill: 'tozeroy', fillcolor: 'rgba(229,72,77,.0)' },
-      { x: [0, p.T * 365], y: [p.K, p.K], mode: 'lines', name: 'Strike', line: { color: '#5a6572', dash: 'dash' } },
+      { x: t, y: sPts, mode: 'lines', name: 'Critical spot', line: { color: COLORS[0], width: 2 }, fill: 'tozeroy', fillcolor: 'rgba(229,72,77,.0)' },
+      { x: [0, p.T * 365], y: [p.K, p.K], mode: 'lines', name: 'Strike', line: { color: ZERO, dash: 'dash' } },
       { x: [0], y: [p.S], mode: 'markers', name: 'Spot today', marker: { color: '#e5484d', size: 9 } },
-    ], baseLayout({ xaxis: { title: 'Days from today', gridcolor: '#252c36' }, yaxis: { title: 'Critical spot', gridcolor: '#252c36' } }));
+    ], baseLayout({ xaxis: { title: 'Days from today', gridcolor: GRID }, yaxis: { title: 'Critical spot', gridcolor: GRID } }));
     $('boundaryNote').textContent = `Exercise immediately whenever the spot is ${inside} the curve; everywhere else, wait. The boundary approaches the strike at expiry.`;
   } else {
-    draw('boundaryPlot', [], baseLayout({ annotations: [{ text: 'Early exercise is never optimal here', xref: 'paper', yref: 'paper', x: 0.5, y: 0.5, showarrow: false, font: { size: 16, color: '#8b95a3' } }], xaxis: { visible: false }, yaxis: { visible: false } }));
+    draw('boundaryPlot', [], baseLayout({ annotations: [{ text: 'Early exercise is never optimal here', xref: 'paper', yref: 'paper', x: 0.5, y: 0.5, showarrow: false, font: { size: 16, color: '#93a0b6' } }], xaxis: { visible: false }, yaxis: { visible: false } }));
     $('boundaryNote').textContent = p.kind === 'call' ? 'An American call on a non-dividend payer is never exercised early (Merton 1973): its price equals the European price. Add a dividend yield above the risk-free rate to see a boundary.' : 'No exercise region on this tree (rate is ~0, so waiting is free).';
   }
 }
@@ -237,7 +241,7 @@ let guideLoaded = false;
 async function loadGuide() {
   if (guideLoaded) return;
   try {
-    const r = await fetch('./guide.html?v=3'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const r = await fetch('./guide.html?v=4'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
     $('guideText').innerHTML = await r.text(); guideLoaded = true;
   } catch (e) { $('guideText').innerHTML = `<p class="hint bad">Could not load the guide (${e.message}). It is also in the repository as GUIDE.md.</p>`; }
 }
@@ -264,7 +268,7 @@ function drawSurface(s) {
     scene: { ...sceneStyle('Log-moneyness ln(K/S)', 'Time to expiry (years)', 'Implied vol (%)'), zaxis: { ...sceneStyle('', '', 'Implied vol (%)').zaxis, range: [zmin, zmax] } } }));
   const idx = [0, Math.floor(s.T.length / 2), s.T.length - 1];
   draw('smilePlot', idx.map((i, n) => ({ x: s.k, y: z[i], mode: 'lines', name: `T = ${(s.T[i] * 365).toFixed(0)}d`, line: { color: COLORS[n], width: 2 } })),
-    baseLayout({ title: { text: 'Volatility smile / skew by maturity', font: { size: 13 } }, xaxis: { title: 'Log-moneyness ln(K/S)', gridcolor: '#252c36' }, yaxis: { title: 'Implied vol (%)', gridcolor: '#252c36' }, shapes: [{ type: 'line', x0: 0, x1: 0, yref: 'paper', y0: 0, y1: 1, line: { color: '#e5484d', dash: 'dash', width: 1 } }], margin: { l: 56, r: 16, t: 34, b: 60 } }));
+    baseLayout({ title: { text: 'Volatility smile / skew by maturity', font: { size: 13 } }, xaxis: { title: 'Log-moneyness ln(K/S)', gridcolor: GRID }, yaxis: { title: 'Implied vol (%)', gridcolor: GRID }, shapes: [{ type: 'line', x0: 0, x1: 0, yref: 'paper', y0: 0, y1: 1, line: { color: '#e5484d', dash: 'dash', width: 1 } }], margin: { l: 56, r: 16, t: 34, b: 60 } }));
 }
 
 // ---------------------------------------------------------------- ticker + chain
@@ -377,11 +381,11 @@ function renderBanner() {
     ['lead', 'Your premium', fmt(prem, 4), `$${(prem * 100).toLocaleString('en-US', { maximumFractionDigits: 0 })} per contract · you ${s === 1 ? 'pay' : 'collect'}`, ''],
     ['', 'Edge vs model', `${edge >= 0 ? '+' : '−'}${fmt(Math.abs(edge), 4)}`, `${Number.isFinite(edgePct) ? (edgePct >= 0 ? '+' : '−') + Math.abs(edgePct * 100).toFixed(1) + '% · ' : ''}${verdict[0]} (σ ${pct(p.sigma, 1)})`, verdict[1]],
     ['', 'Implied vol', Number.isFinite(iv) ? pct(iv, 2) : '—', Number.isFinite(iv) ? `vs σ input ${pct(p.sigma, 1)}` : 'no vol fits this premium', ''],
-    ['', 'Breakeven', fmt(be, 2), `${pct((be - p.S) / p.S, 1)} from spot at expiry`, ''],
+    ['', 'Breakeven (your premium)', fmt(be, 2), `${pct((be - p.S) / p.S, 1)} from spot at expiry`, ''],
     ['', 'P(profit)', pct(pr, 1), 'at expiry, risk-neutral', ''],
     ['', 'Max loss / gain', `${maxLoss} / ${maxGain}`, 'per share', ''],
   ];
-  cells.push(['lead', 'Greeks at this premium', `<button class="chip" id="toImpact2">See how they change →</button>`, 'Greeks are re-evaluated at the volatility your premium implies', '']);
+  cells.push(['', 'Greeks at this premium', `<button class="chip" id="toImpact2">See how they change →</button>`, 'Re-evaluated at the implied vol', '']);
   box.hidden = false;
   box.innerHTML = cells.map(([cls, k, v, sub, tone]) => `<div class="cell ${cls}"><div class="k">${k}</div><div class="v ${tone}">${v}</div><div class="s">${sub}</div></div>`).join('');
   const jump = $('toImpact2'); if (jump) jump.onclick = () => setTab('impact');
@@ -463,7 +467,11 @@ function renderImpact() {
   IMPACT_CHARTS.forEach(([k, label], i) => {
     const line = (x, color, dash) => ({ type: 'line', x0: x, x1: x, yref: 'paper', y0: 0, y1: 1, line: { color, dash, width: 1.4 } });
     draw('imp-' + k, [{ x: pts.map((q) => q.x), y: pts.map((q) => q[k]), mode: 'lines', line: { color: COLORS[i % COLORS.length], width: 2.4 }, showlegend: false, hovertemplate: `premium %{x:.3f}<br>${label} %{y:.4f}<extra></extra>` }],
-      baseLayout({ title: { text: label, font: { size: 13 } }, margin: { l: 50, r: 8, t: 30, b: 40 }, xaxis: { title: { text: 'Premium', font: { size: 11 } }, gridcolor: '#252c36' }, yaxis: { gridcolor: '#252c36' }, shapes: [line(model, '#cbd2dc', 'dash'), line(prem, '#f5a623', 'solid')] }));
+      baseLayout({ title: { text: label, font: { size: 13 } }, margin: { l: 50, r: 8, t: 30, b: 40 }, xaxis: { title: { text: 'Premium', font: { size: 11 } }, gridcolor: GRID }, yaxis: { gridcolor: GRID }, shapes: [line(model, TXT, 'dash'), line(prem, COLORS[0], 'solid')],
+        annotations: [
+          { x: model, y: 1, yref: 'paper', text: 'model', showarrow: false, xanchor: model <= prem ? 'left' : 'right', xshift: model <= prem ? 4 : -4, yanchor: 'top', font: { size: 10, color: TXT } },
+          { x: prem, y: 1, yref: 'paper', text: 'yours', showarrow: false, xanchor: model <= prem ? 'right' : 'left', xshift: model <= prem ? -4 : 4, yanchor: 'top', font: { size: 10, color: COLORS[0] } },
+        ] }));
   });
 }
 
@@ -474,6 +482,12 @@ function valueAt(p, S, T, sigma) {
     try { return P.americanPrice(S, p.K, T, p.r, sigma, p.q, p.kind, Math.min(p.steps, 300)); } catch { /* tree invalid at this vol/time: fall back to BSM */ }
   }
   return P.bsmPrice(S, p.K, T, p.r, sigma, p.q, p.kind);
+}
+function wfRange(steps, total) { // running totals of the waterfall, padded 22% each side (and always including 0)
+  let run = 0; const lv = [0, total];
+  steps.forEach((v) => { run += v; lv.push(run); });
+  const lo = Math.min(...lv), hi = Math.max(...lv), pad = Math.max(hi - lo, 1e-6) * 0.22;
+  return [lo - pad, hi + pad];
 }
 function renderWhatIf() {
   const c = cache; if (!c) return; const { p } = c, s = sgn();
@@ -509,9 +523,9 @@ function renderWhatIf() {
   draw('wiWaterfall', [{
     type: 'waterfall', orientation: 'v', x: [...parts.map((x) => x[0]), 'Total P&L'], y: [...parts.map((x) => x[1]), 0],
     measure: [...parts.map(() => 'relative'), 'total'],
-    increasing: { marker: { color: '#3fae78' } }, decreasing: { marker: { color: '#e5484d' } }, totals: { marker: { color: '#f5a623' } },
-    connector: { line: { color: '#3a4451' } }, text: [...parts.map((x) => (x[1] >= 0 ? '+' : '') + x[1].toFixed(3)), (pnl >= 0 ? '+' : '') + pnl.toFixed(3)], textposition: 'outside', cliponaxis: false,
-  }], baseLayout({ yaxis: { title: 'P&L per share', gridcolor: '#252c36', zerolinecolor: '#5a6572' }, xaxis: { gridcolor: 'rgba(0,0,0,0)' }, margin: { l: 60, r: 16, t: 24, b: 50 }, showlegend: false }));
+    increasing: { marker: { color: '#3fae78' } }, decreasing: { marker: { color: '#e5484d' } }, totals: { marker: { color: COLORS[0] } },
+    connector: { line: { color: ZERO } }, text: [...parts.map((x) => (x[1] >= 0 ? '+' : '') + x[1].toFixed(3)), (pnl >= 0 ? '+' : '') + pnl.toFixed(3)], textposition: 'outside', cliponaxis: false,
+  }], baseLayout({ yaxis: { title: 'P&L per share', gridcolor: GRID, zerolinecolor: ZERO, range: wfRange(parts.map((x) => x[1]), pnl) }, xaxis: { gridcolor: 'rgba(0,0,0,0)' }, margin: { l: 60, r: 16, t: 24, b: 50 }, showlegend: false }));
 
   // heat map: spot move x (days passed | vol change)
   const mode = $('wiHeat').value;
@@ -527,9 +541,9 @@ function renderWhatIf() {
   const zmax = Math.max(...z.flat().map(Math.abs)) || 1;
   draw('wiHeatmap', [
     { type: 'heatmap', x: xs, y: ys, z, zmin: -zmax, zmax, colorscale: [[0, '#e5484d'], [0.5, '#12161b'], [1, '#3fae78']], colorbar: { title: { text: 'P&L' }, thickness: 12, len: 0.8 }, hovertemplate: 'spot %{x:+.1f}%<br>' + (mode === 'days' ? '%{y}d passed' : 'vol %{y:+.1f} pts') + '<br>P&L %{z:.3f}<extra></extra>' },
-    { type: 'scatter', mode: 'markers', x: [ds], y: [mode === 'days' ? dd : dv], marker: { color: '#f5a623', size: 11, line: { color: '#000', width: 1.5 } }, hoverinfo: 'skip', showlegend: false },
+    { type: 'scatter', mode: 'markers', x: [ds], y: [mode === 'days' ? dd : dv], marker: { color: COLORS[0], size: 11, line: { color: '#000', width: 1.5 } }, hoverinfo: 'skip', showlegend: false },
   ], baseLayout({ xaxis: { title: 'Spot move (%)', gridcolor: 'rgba(0,0,0,0)' }, yaxis: { title: mode === 'days' ? 'Days passed' : 'Volatility change (pts)', gridcolor: 'rgba(0,0,0,0)' }, margin: { l: 60, r: 16, t: 16, b: 50 }, showlegend: false,
-    shapes: [{ type: 'line', x0: 0, x1: 0, yref: 'paper', y0: 0, y1: 1, line: { color: '#cbd2dc', dash: 'dot', width: 1 } }] }));
+    shapes: [{ type: 'line', x0: 0, x1: 0, yref: 'paper', y0: 0, y1: 1, line: { color: TXT, dash: 'dot', width: 1 } }] }));
 }
 
 // ---------------------------------------------------------------- wiring
@@ -539,7 +553,7 @@ function update() {
   renderTimer = setTimeout(() => {
     state.lsmc = null; $('lsmcStatus').textContent = '';
     try {
-      syncLockedSigma(); compute(); syncSlider(); renderHero(); renderBanner(); renderIvBox(); renderCurrentTab();
+      syncLockedSigma(); compute(); syncSlider(); renderHero(); renderBanner(); renderIvBox(); renderSummary(); renderCurrentTab();
     } catch (e) { showError(e.message); }
   }, 120);
 }
@@ -549,20 +563,124 @@ function renderCurrentTab() {
 }
 function setTab(t) {
   state.tab = t;
-  document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
+  const nav = $('tabsNav');
+  document.querySelectorAll('.tabs button').forEach((b) => {
+    const on = b.dataset.tab === t;
+    b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1;
+    if (on) nav.scrollTo({ left: b.offsetLeft - (nav.clientWidth - b.clientWidth) / 2, behavior: REDUCED ? 'auto' : 'smooth' });
+  });
   document.querySelectorAll('.tabpane').forEach((p) => p.classList.toggle('on', p.id === 'tab-' + t));
   renderCurrentTab();
   if (t === 'surface' && !$('surfacePlot').data) loadSurface();
   if (t === 'guide') loadGuide();
-  if (t !== 'overview') window.scrollTo({ top: 0 });
+  // keep the sticky tab bar in view: only scroll when the reader is already below the results header
+  const top = nav.getBoundingClientRect().top + window.scrollY - 96;
+  if (window.scrollY > top + 4) window.scrollTo({ top, behavior: REDUCED ? 'auto' : 'smooth' });
   window.dispatchEvent(new Event('resize'));
+}
+
+// ---------------------------------------------------------------- UI helpers: toast, tooltips, presets, share, summary
+let toastTimer;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+function setSeg(k, v) {
+  state[k] = v;
+  document.querySelectorAll(`.seg button[data-k="${k}"]`).forEach((b) => {
+    const on = b.dataset.v === v; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}
+function initTooltips() {
+  const tt = $('tooltip');
+  const hide = () => { tt.classList.remove('show'); tt.setAttribute('aria-hidden', 'true'); };
+  const show = (el) => {
+    tt.textContent = el.dataset.tip; tt.classList.add('show'); tt.setAttribute('aria-hidden', 'false');
+    const r = el.getBoundingClientRect(), w = tt.offsetWidth, h = tt.offsetHeight;
+    const x = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), window.innerWidth - w - 8);
+    let y = r.top - h - 10; if (y < 8) y = r.bottom + 10;
+    tt.style.left = x + 'px'; tt.style.top = y + 'px';
+  };
+  document.querySelectorAll('.tip').forEach((el) => {
+    el.addEventListener('mouseenter', () => show(el)); el.addEventListener('mouseleave', hide);
+    el.addEventListener('focus', () => show(el)); el.addEventListener('blur', hide);
+    el.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); if (tt.classList.contains('show')) hide(); else show(el); });
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hide(); });
+  window.addEventListener('scroll', hide, { passive: true });
+  document.addEventListener('click', hide);
+}
+
+const PRESETS = {
+  slide: { type: 'call', side: 'long', style: 'european', S: 100, K: 100, days: 365, sigma: 20, r: 5, q: 0, premium: '', label: 'Loaded the class example: 1-year at-the-money call' },
+  amput: { type: 'put', side: 'long', style: 'american', S: 100, K: 100, days: 365, sigma: 20, r: 5, q: 0, premium: 6.0896, label: 'Loaded an American put priced at 6.0896 (implied vol ≈ 20%)' },
+  deep: { type: 'call', side: 'long', style: 'european', S: 200, K: 100, days: 365, sigma: 20, r: 5, q: 0, premium: 150, label: 'Loaded: model says 104.88, market asks 150' },
+};
+function applyPreset(name) {
+  const p = PRESETS[name]; if (!p) return;
+  setSeg('type', p.type); setSeg('side', p.side); setSeg('style', p.style);
+  ['S', 'K', 'days', 'sigma', 'r', 'q'].forEach((id) => { $(id).value = p[id]; });
+  $('premium').value = p.premium; $('lockIv').checked = false; $('steps').value = 500; $('stepsOut').textContent = '500';
+  state.chain = null; $('chainPick').hidden = true; $('volChips').hidden = true;
+  update(); setTab('overview'); toast(p.label);
+}
+
+function shareURL() {
+  const u = new URL(location.href); u.search = ''; u.hash = '';
+  const q = new URLSearchParams();
+  ['type', 'side', 'style'].forEach((k) => q.set(k, state[k]));
+  ['S', 'K', 'days', 'sigma', 'r', 'q', 'steps'].forEach((id) => q.set(id, $(id).value));
+  if ($('premium').value !== '') q.set('premium', $('premium').value);
+  if ($('lockIv').checked) q.set('lock', '1');
+  u.search = q.toString(); if (state.tab !== 'overview') u.hash = state.tab;
+  return u.toString();
+}
+function restoreFromURL() {
+  const q = new URLSearchParams(location.search); let any = false;
+  ['type', 'side', 'style'].forEach((k) => { const v = q.get(k); if (v && document.querySelector(`.seg button[data-k="${k}"][data-v="${v}"]`)) { setSeg(k, v); any = true; } });
+  ['S', 'K', 'days', 'sigma', 'r', 'q', 'steps'].forEach((id) => { const v = q.get(id); if (v !== null && Number.isFinite(parseFloat(v))) { $(id).value = v; any = true; } });
+  $('stepsOut').textContent = $('steps').value;
+  const pr = q.get('premium'); if (pr !== null && Number.isFinite(parseFloat(pr))) { $('premium').value = pr; any = true; }
+  if (q.get('lock') === '1') $('lockIv').checked = true;
+  return any;
+}
+async function copyShareLink() {
+  const url = shareURL();
+  try { await navigator.clipboard.writeText(url); toast('Link copied. It restores these inputs.'); }
+  catch {
+    const ta = document.createElement('textarea'); ta.value = url; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast('Link copied. It restores these inputs.'); } catch { toast('Could not copy. Copy the address bar instead.'); }
+    ta.remove();
+  }
+}
+
+function renderSummary() {
+  const c = cache, line = $('summaryLine'), mb = $('mbar');
+  if (!c) { line.innerHTML = ''; mb.hidden = true; return; }
+  const { p } = c;
+  const chips = [
+    ['lead', `${state.side === 'long' ? 'Long' : 'Short'} ${p.style === 'american' ? 'American' : 'European'} ${p.kind}`],
+    ['', `S ${fmt(p.S, 2)}`], ['', `K ${fmt(p.K, 2)}`], ['', `${+(p.T * 365).toFixed(1)} d`],
+    ['', `σ ${pct(p.sigma, 1)}`], ['', `r ${pct(p.r, 2)}`], ['', `q ${pct(p.q, 2)}`],
+  ];
+  line.innerHTML = chips.map(([cls, t]) => `<span class="sum-chip ${cls}">${t}</span>`).join('');
+  $('mbLabel').textContent = `${p.style === 'american' ? 'American' : 'European'} ${p.kind} premium`;
+  $('mbPrice').textContent = fmt(modelPrice(), 4);
+  mb.hidden = false; // CSS shows the bar on small screens only
+}
+function initWelcome(restored) {
+  let dismissed = false;
+  try { dismissed = localStorage.getItem('pricer.welcomeDismissed') === '1'; } catch { /* private mode */ }
+  $('welcome').hidden = dismissed || restored;
+  $('welcomeClose').addEventListener('click', () => { $('welcome').hidden = true; try { localStorage.setItem('pricer.welcomeDismissed', '1'); } catch { /* ignore */ } });
+  document.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('click', () => applyPreset(b.dataset.preset)));
+  $('welcomeGuide').addEventListener('click', (e) => { e.preventDefault(); setTab('guide'); });
 }
 
 function init() {
   $('howText').innerHTML = HOW;
   document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
-    b.parentElement.querySelectorAll('button').forEach((x) => x.classList.remove('on')); b.classList.add('on');
-    state[b.dataset.k] = b.dataset.v;
+    setSeg(b.dataset.k, b.dataset.v);
     if (b.dataset.k === 'type') fillStrikes();
     update();
   }));
@@ -603,6 +721,28 @@ function init() {
   });
   $('toImpact').addEventListener('click', () => setTab('impact'));
   $('guideLink').addEventListener('click', (e) => { e.preventDefault(); setTab('guide'); });
+  $('tabsNav').addEventListener('keydown', (e) => {
+    const tabs = [...document.querySelectorAll('.tabs button')], i = tabs.indexOf(document.activeElement);
+    if (i < 0) return;
+    let n = null;
+    if (e.key === 'ArrowRight') n = (i + 1) % tabs.length; else if (e.key === 'ArrowLeft') n = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'Home') n = 0; else if (e.key === 'End') n = tabs.length - 1;
+    if (n !== null) { e.preventDefault(); tabs[n].focus(); setTab(tabs[n].dataset.tab); }
+  });
+  const nav = $('tabsNav');
+  const edges = () => { // fade the tab bar's edges only where more tabs are hidden
+    const max = nav.scrollWidth - nav.clientWidth, x = nav.scrollLeft, canScroll = max > 2;
+    nav.classList.toggle('more', canScroll && x < max - 2 && x <= 2);
+    nav.classList.toggle('start', canScroll && x > 2 && x < max - 2);
+    nav.classList.toggle('end', canScroll && x >= max - 2);
+  };
+  nav.addEventListener('scroll', edges, { passive: true }); window.addEventListener('resize', edges); setTimeout(edges, 300);
+  $('shareBtn').addEventListener('click', copyShareLink);
+  $('mbInputs').addEventListener('click', () => $('inputsPanel').scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'start' }));
+  $('mbResults').addEventListener('click', () => $('main').scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'start' }));
+  initTooltips();
+  const restored = restoreFromURL();
+  initWelcome(restored);
   const hashTab = location.hash.replace('#', '');
   refreshPill();
   update();
@@ -612,8 +752,8 @@ function init() {
 async function refreshPill() {
   const pill = $('dataPill');
   const base = await D.detectApi();
-  if (base !== null) { pill.textContent = 'data: live Yahoo Finance'; pill.className = 'pill live'; }
-  else { pill.textContent = 'data: bundled snapshots'; pill.className = 'pill snap'; }
+  if (base !== null) { $('dataPillText').textContent = 'Live Yahoo Finance'; pill.className = 'pill live'; pill.setAttribute('aria-label', 'Market data: live Yahoo Finance'); }
+  else { $('dataPillText').textContent = 'Bundled snapshots'; pill.className = 'pill snap'; pill.setAttribute('aria-label', 'Market data: bundled Yahoo Finance snapshots'); }
   const snaps = await D.snapshotTickers();
   $('ticker').placeholder = base !== null ? 'Any ticker — AAPL, SPY, NDX…' : `Ticker — ${snaps.filter((s) => s !== 'DEMO').slice(0, 5).join(', ')}…`;
 }

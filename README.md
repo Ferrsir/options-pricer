@@ -78,6 +78,7 @@ python -m pricer serve          # http://localhost:8000
 `docs/` is a static site (plain JS + Plotly, no build step) served by GitHub Pages. The pricing engine is re-implemented in JavaScript and agrees with Python to ~1e-12.
 
 * Inputs for S, K, expiry, σ, r, q; call/put, long/short, European/American
+* Glass-style UI with a start-here guide, one-click examples, info tooltips, keyboard-navigable tabs, and a **Copy link** button that restores your exact inputs from the URL
 * Type or drag a **premium**: edge vs the model, implied vol, breakeven, P(profit), max gain/loss; optionally lock σ to that premium's implied vol
 * **Premium impact** tab: model-vs-market comparison of σ and every Greek, plus curves showing how each number reacts as the premium changes (e.g. "model says 105, market says 150")
 * **What-if** tab: move spot, volatility and days and see your P&L, a Greek waterfall of where it came from, and a P&L heat map
