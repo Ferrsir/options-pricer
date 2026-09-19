@@ -87,7 +87,7 @@ python -m pricer serve          # http://localhost:8000
 **Ticker data: any optionable US ticker.** Neither Yahoo Finance nor Cboe can be called from a web page (no CORS), so the site talks to a small API and degrades gracefully:
 
 1. **`python -m pricer serve`** on your machine: Yahoo Finance first, Cboe's public delayed chains as the automatic fallback; the vol surface is built in Python.
-2. **The serverless API in [`serverless/`](serverless/)** (standard-library Python, Cboe data): quotes, chains and a compact multi-expiry payload. The browser builds the vol surface itself (`docs/js/surface.js`, a port of the Python pipeline, checked against it to ~1e-13). Point the site at it with `DEFAULT_API` in `docs/js/data.js`.
+2. **The serverless API in [`serverless/`](serverless/)** (standard-library Python, Cboe data): quotes, chains and a compact multi-expiry payload. The browser builds the vol surface itself (`docs/js/surface.js`, a port of the Python pipeline, checked against it to ~1e-13). It is deployed on Vercel (https://options-pricer-api-five.vercel.app) and wired in through `DEFAULT_API` in `docs/js/data.js`.
 3. **Bundled real Yahoo snapshots** (`docs/data/snapshots.json`: NDX, SPX, SPY, QQQ, AAPL, MSFT, NVDA, TSLA, AMZN, GOOGL, META, refreshed with `python scripts/snapshot.py`) when no API is reachable.
 
 ## Repo layout
