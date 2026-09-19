@@ -43,7 +43,7 @@ Pushing to `main` deploys the site (GitHub Pages, source = `main` / `docs`). A b
 ## Rules that are easy to break
 
 1. **Two engines must agree.** `docs/js/pricing.js` mirrors `src/pricer/{bsm,binomial,lsmc}.py`. Change one, change the other, then compare numbers (reference case: S=K=100, T=1, r=5%, σ=20%, q=0 → call 10.450583572, put 5.573526022, American put with 1000 steps 6.089595283). There is no Node here; check JS in a browser console via `window.__pricer.P` on a page served by `python -m pricer serve`.
-2. **Bump the cache-bust version** (`?v=N`) in `docs/index.html`, `docs/js/app.js` (imports and the `guide.html` fetch) and `docs/js/data.js` whenever you change anything under `docs/`. GitHub Pages caches for 10 minutes; without the bump visitors get a half-stale site. Current value: `v=7`.
+2. **Bump the cache-bust version** (`?v=N`) in `docs/index.html`, `docs/js/app.js` (imports and the `guide.html` fetch) and `docs/js/data.js` whenever you change anything under `docs/`. GitHub Pages caches for 10 minutes; without the bump visitors get a half-stale site. Current value: `v=8`.
 3. **`GUIDE.md` is the source of `docs/guide.html`.** Edit `GUIDE.md`, then run `python scripts/build_guide.py` and commit both. Do not hand-edit `docs/guide.html`.
 4. **`docs/data/snapshots.json` is generated** from real market data by `scripts/snapshot.py`. Never hand-edit or fabricate values. Quote figures in `GUIDE.md` that come from the reference case should be recomputed, not guessed.
 5. **Tree validity.** The CRR tree needs `d < e^{(r-q)dt} < u`, i.e. `σ > |r-q|·√dt`. Any code that searches over σ (implied vol) must start above that bound or catch the error. See `american_implied_vol` (Python) and `americanImpliedVol` (JS).

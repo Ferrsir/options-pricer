@@ -5,7 +5,7 @@
 //   2. per expiry: reject outliers (rolling median + MAD), Savitzky-Golay smooth (window 7, order 2)
 //   3. stage 1: PCHIP across strike, damped linear extrapolation beyond the quoted strikes
 //   4. stage 2: PCHIP across time on TOTAL variance (kept non-decreasing in T), converted back to vol
-import { impliedVol } from './pricing.js?v=7';
+import { impliedVol } from './pricing.js?v=8';
 
 const EXTRAP_DAMPING = 0.5;
 export const K_RANGE = [-0.15, 0.1];

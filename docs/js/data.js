@@ -5,11 +5,11 @@
 //   2. Bundled snapshots in ./data/snapshots.json (real Yahoo data captured when the site was built)
 //   3. Manual entry
 
-import { buildSurface } from './surface.js?v=7';
+import { buildSurface } from './surface.js?v=8';
 
 const LS_KEY = 'pricer.apiBase';
 // Public any-ticker API (serverless/, deployed once). Empty until deployed; the page then falls back to the bundled snapshots.
-export const DEFAULT_API = '';
+export const DEFAULT_API = 'https://options-pricer-api-five.vercel.app'; // serverless/ deployed on Vercel (Cboe delayed chains, any optionable ticker)
 let snapshots = null;
 let caps = {};
 
@@ -49,7 +49,7 @@ export const apiCaps = () => caps;
 
 export async function loadSnapshots() {
   if (snapshots) return snapshots;
-  try { snapshots = await getJson('./data/snapshots.json?v=7'); } catch { snapshots = {}; }
+  try { snapshots = await getJson('./data/snapshots.json?v=8'); } catch { snapshots = {}; }
   return snapshots;
 }
 

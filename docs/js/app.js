@@ -1,5 +1,5 @@
-import * as P from './pricing.js?v=7';
-import * as D from './data.js?v=7';
+import * as P from './pricing.js?v=8';
+import * as D from './data.js?v=8';
 
 const $ = (id) => document.getElementById(id);
 const state = { type: 'call', side: 'long', style: 'european', chain: null, chainExpiry: null, ticker: '', tab: 'overview', lsmc: null, basis: 'market', iv: NaN, surf: null };
@@ -284,7 +284,7 @@ let guideLoaded = false;
 async function loadGuide() {
   if (guideLoaded) return;
   try {
-    const r = await fetch('./guide.html?v=7'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const r = await fetch('./guide.html?v=8'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
     $('guideText').innerHTML = await r.text(); guideLoaded = true;
   } catch (e) { $('guideText').innerHTML = `<p class="hint bad">Could not load the guide (${e.message}). It is also in the repository as GUIDE.md.</p>`; }
 }
