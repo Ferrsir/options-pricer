@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
 </head>
 <body>
@@ -74,7 +74,7 @@
           <input id="ticker" class="grow" placeholder="Ticker: AAPL, SPY, NDX…" autocomplete="off" autocapitalize="characters" spellcheck="false">
           <button id="loadTicker" class="btn primary">Load</button>
         </div>
-        <p id="tickerStatus" class="hint" role="status">Pull spot, rate, dividend yield and historical vol from Yahoo Finance.</p>
+        <p id="tickerStatus" class="hint" role="status">Type any stock, ETF or index that has listed options (AAPL, PLTR, SPY, SPX…) to pull spot, rate, dividend yield and 30-day implied vol.</p>
         <div id="volChips" class="chips" hidden></div>
         <div id="chainPick" hidden>
           <label class="fld"><span class="lbl">Expiry</span><select id="expirySel"></select></label>
@@ -105,7 +105,7 @@
           <div class="fld"><div class="lbl"><label for="K">Strike K</label><button type="button" class="tip" data-tip="Strike: the fixed price in the contract at which you may buy (call) or sell (put)." aria-label="About strike"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in pre"><input id="K" type="number" inputmode="decimal" step="any" value="100"><i class="u">$</i></span></div>
           <div class="fld"><div class="lbl"><label for="days">Days to expiry</label><button type="button" class="tip" data-tip="Days until the option expires. The math converts to years (days ÷ 365)." aria-label="About days to expiry"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in"><input id="days" type="number" inputmode="decimal" step="any" value="365"><i class="u">d</i></span></div>
           <div class="fld"><div class="lbl"><label for="sigma">Volatility σ</label><button type="button" class="tip" data-tip="Volatility: how much the price moves per year. 20% means a typical yearly swing of about ±20%. More volatility means a more expensive option." aria-label="About volatility"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in"><input id="sigma" type="number" inputmode="decimal" step="any" value="20"><i class="u">%</i></span></div>
-          <div class="fld"><div class="lbl"><label for="r">Risk-free rate r</label><button type="button" class="tip" data-tip="What a safe deposit earns per year (Yahoo fill uses the 13-week T-bill). It discounts the strike you pay later." aria-label="About the risk-free rate"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in"><input id="r" type="number" inputmode="decimal" step="any" value="5"><i class="u">%</i></span></div>
+          <div class="fld"><div class="lbl"><label for="r">Risk-free rate r</label><button type="button" class="tip" data-tip="What a safe deposit earns per year (the ticker fill uses the 13-week T-bill). It discounts the strike you pay later." aria-label="About the risk-free rate"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in"><input id="r" type="number" inputmode="decimal" step="any" value="5"><i class="u">%</i></span></div>
           <div class="fld"><div class="lbl"><label for="q">Dividend yield q</label><button type="button" class="tip" data-tip="Cash the stock pays out per year as a % of its price. Option holders don’t receive it, so a higher yield lowers call prices and raises put prices." aria-label="About dividend yield"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in"><input id="q" type="number" inputmode="decimal" step="any" value="0"><i class="u">%</i></span></div>
         </div>
         <div class="fld slider"><div class="lbl"><label for="steps">Tree steps</label><button type="button" class="tip" data-tip="Number of up/down steps in the binomial tree. More steps get closer to Black-Scholes but run slower." aria-label="About tree steps"><svg class="ic sm"><use href="#i-info"/></svg></button><output id="stepsOut" for="steps">500</output></div><input id="steps" type="range" min="20" max="2000" step="10" value="500"></div>
@@ -145,7 +145,7 @@
           <input id="apiBase" class="grow" placeholder="http://localhost:8000" aria-label="Data API base URL">
           <button id="saveApi" class="btn">Save</button>
         </div>
-        <p class="hint">Live option chains for any ticker need <code>python -m pricer serve</code> (see README). Without it the site uses bundled Yahoo snapshots.</p>
+        <p class="hint">Surfaces for any ticker come from live, 15-minute-delayed Cboe option chains through a small public API. If that API is unreachable the site falls back to 11 bundled snapshots (or run <code>python -m pricer serve</code> locally).</p>
       </div>
     </details>
   </aside>
@@ -160,7 +160,7 @@
       <button type="button" class="x" id="welcomeClose" aria-label="Dismiss the start-here guide"><svg class="ic"><use href="#i-x"/></svg></button>
       <h2 id="welcomeTitle">Price an option in three steps</h2>
       <ol class="steps">
-        <li><b>Set the contract</b><span>Type the numbers on the left, or load a ticker from Yahoo Finance.</span></li>
+        <li><b>Set the contract</b><span>Type the numbers on the left, or load any optionable ticker.</span></li>
         <li><b>Enter a premium</b><span>Type the price you are being offered. See if it is cheap or rich, and the volatility it implies.</span></li>
         <li><b>Explore the tabs</b><span>Greeks, payoff, what-if P&amp;L, the volatility surface. Every term is explained in the Guide.</span></li>
       </ol>
@@ -328,7 +328,7 @@
 </main>
 
 <footer class="foot">
-  Educational tool built for Traders@SMU HW 1. Not investment advice. Market data © Yahoo Finance and may be delayed or inaccurate.
+  Educational tool built for Traders@SMU HW 1. Not investment advice. Market data: Cboe delayed quotes (about 15 minutes) or bundled Yahoo Finance snapshots; it may be delayed or inaccurate.
 </footer>
 
 <!-- mobile quick bar -->
@@ -341,6 +341,6 @@
 <div id="tooltip" role="tooltip" aria-hidden="true"></div>
 <div id="toast" role="status" aria-live="polite"></div>
 
-<script type="module" src="js/app.js?v=8"></script>
+<script type="module" src="js/app.js?v=9"></script>
 </body>
 </html>
