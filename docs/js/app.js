@@ -1,8 +1,8 @@
-import * as P from './pricing.js?v=11';
-import * as D from './data.js?v=11';
+import * as P from './pricing.js?v=13';
+import * as D from './data.js?v=13';
 
 const $ = (id) => document.getElementById(id);
-const state = { type: 'call', side: 'long', style: 'european', chain: null, chainExpiry: null, ticker: '', tab: 'overview', lsmc: null, basis: 'market', iv: NaN, surf: null };
+const state = { premAuto: false, type: 'call', side: 'long', style: 'american', chain: null, chainExpiry: null, ticker: '', tab: 'overview', lsmc: null, basis: 'market', iv: NaN, surf: null };
 const COLORS = ['#f5b13d', '#a9cf3f', '#3fae78', '#60a5fa', '#c4a1ff'];
 const GRID = 'rgba(255,255,255,0.07)', ZERO = 'rgba(255,255,255,0.22)', TXT = '#cbd5e6';
 const FONT = '"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif';
@@ -284,7 +284,7 @@ let guideLoaded = false;
 async function loadGuide() {
   if (guideLoaded) return;
   try {
-    const r = await fetch('./guide.html?v=11'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const r = await fetch('./guide.html?v=13'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
     $('guideText').innerHTML = await r.text(); guideLoaded = true;
   } catch (e) { $('guideText').innerHTML = `<p class="hint bad">Could not load the guide (${e.message}). It is also in the repository as GUIDE.md.</p>`; }
 }
@@ -355,7 +355,7 @@ async function loadTicker() {
   const st = $('tickerStatus'); st.className = 'hint'; st.textContent = 'Loading…'; $('loadTicker').disabled = true;
   try {
     const q = await D.getQuote(t);
-    state.ticker = t; state.chain = null;
+    state.ticker = t; state.chain = null; state.premAuto = true; // the premium box follows the model's recommended price until the user types their own
     $('premium').value = ''; // a premium typed for the previous ticker means nothing here
     $('S').value = +q.spot.toFixed(4);
     $('r').value = +(q.rate * 100).toFixed(3);
@@ -368,9 +368,12 @@ async function loadTicker() {
     const chips = $('volChips'); chips.hidden = false; chips.innerHTML = '';
     [['30-day implied vol', q.iv30], ['30d hist vol', q.hist_vol], ['1y hist vol', q.hist_vol_1y]].forEach(([l, v]) => { if (!Number.isFinite(v)) return; const b = document.createElement('button'); b.className = 'chip'; b.textContent = `σ = ${l} ${(v * 100).toFixed(1)}%`; b.onclick = () => { $('sigma').value = +(v * 100).toFixed(2); update(); }; chips.appendChild(b); });
     const sel = $('expirySel'); $('chainPick').hidden = !(q.expiries && q.expiries.length);
-    sel.innerHTML = '<option value="">Choose expiry…</option>' + (q.expiries || []).map((e) => `<option value="${e}">${e} (${Math.max(0, Math.round((new Date(e) - Date.now()) / 864e5))}d)</option>`).join('');
+    sel.innerHTML = '<option value="">Choose a real expiry…</option>' + (q.expiries || []).map((e) => `<option value="${e}">${e} (${Math.max(0, Math.round((new Date(e) - Date.now()) / 864e5))}d)</option>`).join('');
     $('strikeSel').innerHTML = '';
     $('surfTicker').value = t.toUpperCase().replace('^', '');
+    // a normal starting option: the first listed expiry at least 25 days out (no expiry list, e.g. snapshots: keep the days box as it is)
+    const dayOf = (e) => (Date.parse(e + 'T20:00:00Z') - Date.now()) / 864e5, def = (q.expiries || []).find((e) => dayOf(e) >= 25);
+    if (def) $('days').value = +dayOf(def).toFixed(2);
     update();
   } catch (e) { st.className = 'hint bad'; st.textContent = e.message; }
   $('loadTicker').disabled = false;
@@ -383,17 +386,19 @@ async function loadExpiry() {
     state.chain = ch; state.chainExpiry = e;
     $('days').value = +(ch.T * 365).toFixed(2);
     fillStrikes();
+    update();
   } catch (err) { $('tickerStatus').className = 'hint bad'; $('tickerStatus').textContent = err.message; }
 }
 function fillStrikes() {
   if (!state.chain) return;
   const S = parseFloat($('S').value);
   const rows = state.chain.rows.filter((r) => r.type === state.type && r.strike > S * 0.6 && r.strike < S * 1.4).sort((a, b) => a.strike - b.strike);
-  $('strikeSel').innerHTML = '<option value="">Choose contract…</option>' + rows.map((r) => `<option value="${r.strike}">${r.strike}  ·  ${r.bid}/${r.ask}  ·  IV ${(r.impliedVolatility * 100).toFixed(1)}%</option>`).join('');
+  $('strikeSel').innerHTML = '<option value="">Choose a real contract…</option>' + rows.map((r) => `<option value="${r.strike}">${r.strike}  ·  ${r.bid}/${r.ask}  ·  IV ${(r.impliedVolatility * 100).toFixed(1)}%</option>`).join('');
 }
 function pickStrike() {
   const k = parseFloat($('strikeSel').value); if (!state.chain || !k) return;
   const r = state.chain.rows.find((x) => x.type === state.type && x.strike === k); if (!r) return;
+  state.premAuto = false; // the market's own price replaces the recommended one
   $('K').value = k;
   const mid = r.bid > 0 && r.ask > 0 ? (r.bid + r.ask) / 2 : r.lastPrice;
   $('premium').value = +mid.toFixed(4);
@@ -407,6 +412,14 @@ const modelPrice = () => (cache ? (cache.p.style === 'american' ? cache.mod.am.p
 const effPrice = () => (cache ? (cache.p.style === 'american' ? cache.am.price : cache.bsm) : NaN);
 const paidPremium = () => { const m = getPremium(); return Number.isFinite(m) ? m : modelPrice(); };
 
+// while premAuto is on, the premium box simply mirrors the model's fair value for the current inputs
+function syncAutoPremium() {
+  const raw = readRaw(); if (validate(raw)) return;
+  try {
+    const m = raw.style === 'american' ? P.americanPrice(raw.S, raw.K, raw.T, raw.r, raw.sigma, raw.q, raw.kind, raw.steps) : P.bsmPrice(raw.S, raw.K, raw.T, raw.r, raw.sigma, raw.q, raw.kind);
+    if (Number.isFinite(m) && m >= 5e-5) $('premium').value = +m.toFixed(4);
+  } catch { /* tree invalid at this sigma: leave the premium as it is */ }
+}
 function computeIV() {
   const prem = getPremium(), raw = readRaw();
   state.iv = NaN;
@@ -424,7 +437,7 @@ function syncBasisUI() {
   const prem = getPremium(), ok = Number.isFinite(state.iv) && state.iv > 0, raw = readRaw();
   document.querySelector('.seg button[data-k="basis"][data-v="market"]').disabled = !ok;
   const note = $('basisNote');
-  if (!Number.isFinite(prem)) note.textContent = 'Type a premium (or press “Start from this”) to compare it with the model σ.';
+  if (!Number.isFinite(prem)) note.textContent = 'Type a premium (or press “Use recommended”) to compare it with the model σ.';
   else if (!ok) note.textContent = 'This premium is outside the no-arbitrage bounds, so no volatility fits it. Everything uses the model σ.';
   else if (state.basis === 'market') note.textContent = `Greeks, payoff, what-if and the Greek surface use ${pct(state.iv, 2)}, the σ implied by your premium. The fair value above still uses the model σ (${pct(raw.sigma, 2)}).`;
   else note.textContent = `Greeks, payoff, what-if and the Greek surface use the model σ (${pct(raw.sigma, 2)}). Your premium implies ${pct(state.iv, 2)}.`;
@@ -436,10 +449,11 @@ function renderFair() {
   box.hidden = false;
   $('fairVal').textContent = fmt(m, 4);
   $('fairSig').textContent = pct(c.raw.sigma, 1);
-  $('premium').placeholder = `Model says ${fmt(m, 4)}. Type yours…`;
+  $('premium').placeholder = `Recommended ${fmt(m, 4)}. Type yours…`;
   const atFair = Number.isFinite(prem) && Math.abs(prem - m) < 5e-5, worthless = m < 5e-5; // a premium of 0 has no implied vol, so there is nothing to start from
-  $('fairUse').textContent = atFair ? 'At fair value' : worthless ? 'Model ≈ 0' : 'Start from this';
+  $('fairUse').textContent = atFair ? 'Using recommended' : worthless ? 'Model ≈ 0' : 'Use recommended';
   $('fairUse').disabled = atFair || worthless;
+  $('premAutoNote').textContent = state.premAuto ? 'Filled in with the recommended price. Type your own premium (or drag the slider) and everything below updates: implied volatility, Greeks, charts and surfaces.' : Number.isFinite(prem) ? 'This is your own premium. “Use recommended” puts the model’s price back.' : '';
 }
 function renderIvBox() {
   const box = $('ivReadout'), prem = getPremium(), raw = readRaw(), iv = state.iv;
@@ -448,7 +462,7 @@ function renderIvBox() {
   if (!(prem > 0)) { box.textContent = 'Enter a premium above 0.'; return; }
   if (!Number.isFinite(iv)) { box.textContent = 'No volatility reproduces this premium: it is outside the no-arbitrage bounds (below intrinsic/forward value or above the underlying).'; return; }
   const same = Math.abs(iv - raw.sigma) < 5e-4; // within 0.05 vol points: the same number at the precision shown, so do not claim "more" or "less"
-  box.innerHTML = `Implied vol (${raw.style}): <b>${(iv * 100).toFixed(2)}%</b> <button class="chip" id="useIv">use as model σ</button><br><span class="hint">vs model σ ${(raw.sigma * 100).toFixed(1)}% → ${same ? 'this premium matches the model σ' : iv > raw.sigma ? 'this premium prices in MORE vol than the model σ' : 'this premium prices in LESS vol than the model σ'}</span>`;
+  box.innerHTML = `Implied vol (${raw.style}): <b>${(iv * 100).toFixed(2)}%</b> <button class="chip" id="useIv">use as model σ</button><br><span class="hint">vs model σ ${(raw.sigma * 100).toFixed(2)}% → ${same ? 'this premium matches the model σ' : iv > raw.sigma ? 'this premium prices in MORE vol than the model σ' : 'this premium prices in LESS vol than the model σ'}</span>`;
   $('useIv').onclick = () => { $('sigma').value = +(iv * 100).toFixed(3); update(); };
 }
 function syncSlider() {
@@ -489,7 +503,7 @@ function renderBanner() {
   const maxGain = s === 1 ? (p.kind === 'call' ? 'unbounded' : fmt(Math.max(p.K - prem, 0), 2)) : fmt(prem, 2);
   const iv = state.iv;
   const cells = [
-    ['lead', 'Your premium', fmt(prem, 4), `$${(prem * 100).toLocaleString('en-US', { maximumFractionDigits: 0 })} per contract · you ${s === 1 ? 'pay' : 'collect'}`, ''],
+    ['lead', state.premAuto ? 'Recommended premium' : 'Your premium', fmt(prem, 4), `$${(prem * 100).toLocaleString('en-US', { maximumFractionDigits: 0 })} per contract · you ${s === 1 ? 'pay' : 'collect'}`, ''],
     ['', 'Edge vs model', Math.abs(edge) < 5e-5 ? '0.0000' : `${edge >= 0 ? '+' : '−'}${fmt(Math.abs(edge), 4)}`, `${Number.isFinite(edgePct) ? (Math.abs(edgePct * 100) < 0.05 ? '0.0' : (edgePct >= 0 ? '+' : '−') + Math.abs(edgePct * 100).toFixed(1)) + '% · ' : ''}${verdict[0]} (σ ${pct(raw.sigma, 1)})`, verdict[1]],
     ['', 'Implied vol', Number.isFinite(iv) ? pct(iv, 2) : '—', Number.isFinite(iv) ? `vs model σ ${pct(raw.sigma, 1)}` : 'no vol fits this premium', ''],
     ['', 'Breakeven (your premium)', fmt(be, 2), `${pct((be - p.S) / p.S, 1)} from spot at expiry`, ''],
@@ -665,6 +679,7 @@ function update() {
   renderTimer = setTimeout(() => {
     state.lsmc = null; $('lsmcStatus').textContent = '';
     try {
+      if (state.premAuto) syncAutoPremium();
       computeIV(); compute(); syncBasisUI(); renderFair(); syncSlider(); renderHero(); renderBanner(); renderIvBox(); renderSummary(); renderCurrentTab();
     } catch (e) { showError(e.message); }
   }, 120);
@@ -730,6 +745,7 @@ const PRESETS = {
 };
 function applyPreset(name) {
   const p = PRESETS[name]; if (!p) return;
+  state.premAuto = false;
   setSeg('type', p.type); setSeg('side', p.side); setSeg('style', p.style);
   ['S', 'K', 'days', 'sigma', 'r', 'q'].forEach((id) => { $(id).value = p[id]; });
   $('premium').value = p.premium; setSeg('basis', 'market'); $('steps').value = 500; $('stepsOut').textContent = '500';
@@ -819,16 +835,16 @@ function init() {
     update();
   }));
   ['S', 'K', 'days', 'sigma', 'r', 'q'].forEach((id) => $(id).addEventListener('input', update));
-  $('premium').addEventListener('input', update);
-  $('premSlider').addEventListener('input', () => { $('premium').value = (+$('premSlider').value).toFixed(4); update(); });
-  $('fairUse').addEventListener('click', () => { const m = modelPrice(); if (Number.isFinite(m)) { $('premium').value = +m.toFixed(4); update(); } });
+  $('premium').addEventListener('input', () => { state.premAuto = false; update(); }); // typing your own premium stops the auto-fill
+  $('premSlider').addEventListener('input', () => { state.premAuto = false; $('premium').value = (+$('premSlider').value).toFixed(4); update(); });
+  $('fairUse').addEventListener('click', () => { state.premAuto = true; update(); });
   $('greekLines').addEventListener('change', renderGreeks);
   $('greekSurfMode').addEventListener('change', renderGreekSurface);
   document.querySelectorAll('#premChips .chip').forEach((b) => b.addEventListener('click', () => {
     const v = b.dataset.p, model = modelPrice();
-    if (v === 'clear') $('premium').value = '';
-    else if (v === 'model') { if (Number.isFinite(model)) $('premium').value = +model.toFixed(4); }
-    else if (Number.isFinite(model)) $('premium').value = +Math.max(model * (1 + parseFloat(v)), 0).toFixed(4); // always relative to the MODEL price, so +10% then -10% is not a random walk
+    if (v === 'clear') { state.premAuto = false; $('premium').value = ''; }
+    else if (v === 'model') { state.premAuto = true; }
+    else if (Number.isFinite(model)) { state.premAuto = false; $('premium').value = +Math.max(model * (1 + parseFloat(v)), 0).toFixed(4); } // always relative to the MODEL price, so +10% then -10% is not a random walk
     update();
   }));
   ['wiSpot', 'wiVol', 'wiDays'].forEach((id) => $(id).addEventListener('input', renderWhatIf));
@@ -837,7 +853,7 @@ function init() {
   document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
   $('loadTicker').addEventListener('click', loadTicker);
   $('ticker').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadTicker(); });
-  $('expirySel').addEventListener('change', loadExpiry);
+  $('expirySel').addEventListener('change', () => loadExpiry());
   $('strikeSel').addEventListener('change', pickStrike);
   $('greekX').addEventListener('change', renderGreeks);
   $('greek3d').addEventListener('change', renderGreekSurface);

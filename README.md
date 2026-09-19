@@ -1,4 +1,4 @@
-# Options Premium Pricer
+# American Options Pricer
 
 **Traders@SMU · HW 1.** Black-Scholes-Merton, American binomial tree, Longstaff-Schwartz Monte Carlo, Greeks, implied volatility and volatility surfaces, as a Python package, a CLI and a website.
 
@@ -79,7 +79,7 @@ python -m pricer serve          # http://localhost:8000
 
 * Inputs for S, K, expiry, σ, r, q; call/put, long/short, European/American
 * Glass-style UI with a start-here guide, one-click examples, info tooltips, keyboard-navigable tabs, and a **Copy link** button that restores your exact inputs from the URL
-* Type or drag a **premium**: edge vs the model, implied vol, breakeven, P(profit), max gain/loss; a *Model fair value → Start from this* button, and a switch that puts the Greeks, the 3-D Greek surface, payoff, What-if and a vol-surface marker at either your σ or the σ your premium implies (Greeks tab overlays both)
+* Type or drag a **premium**: edge vs the model, implied vol, breakeven, P(profit), max gain/loss; a *Recommended premium* that is pre-filled when you load a stock (type your own to see everything react), and a switch that puts the Greeks, the 3-D Greek surface, payoff, What-if and a vol-surface marker at either your σ or the σ your premium implies (Greeks tab overlays both)
 * **Premium impact** tab: model-vs-market comparison of σ and every Greek, plus curves showing how each number reacts as the premium changes (e.g. "model says 105, market says 150")
 * **What-if** tab: move spot, volatility and days and see your P&L, a Greek waterfall of where it came from, and a P&L heat map
 * Overview (BSM / European tree / American tree / LSMC), Greeks (charts vs spot, time, vol and a 3-D Greek surface), payoff diagram, tree convergence and early-exercise boundary, interactive 3-D vol surface, live sanity checks, and the derivation

@@ -5,7 +5,7 @@
 //   2. Bundled snapshots in ./data/snapshots.json (real Yahoo data captured when the site was built)
 //   3. Manual entry
 
-import { buildSurface } from './surface.js?v=11';
+import { buildSurface } from './surface.js?v=13';
 
 const LS_KEY = 'pricer.apiBase';
 // Public any-ticker API (serverless/, deployed on Vercel). If it is unreachable the page falls back to the bundled snapshots.
@@ -49,7 +49,7 @@ export const apiCaps = () => caps;
 
 export async function loadSnapshots() {
   if (snapshots) return snapshots;
-  try { snapshots = await getJson('./data/snapshots.json?v=11'); } catch { snapshots = {}; }
+  try { snapshots = await getJson('./data/snapshots.json?v=13'); } catch { snapshots = {}; }
   return snapshots;
 }
 

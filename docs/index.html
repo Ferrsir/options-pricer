@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Options Premium Pricer · Black-Scholes, American tree &amp; Greeks</title>
+<title>American Options Pricer · binomial tree, Greeks &amp; vol surface</title>
 <meta name="description" content="Price options with Black-Scholes-Merton, an American binomial tree and Longstaff-Schwartz Monte Carlo. Type any premium to see implied volatility, Greeks, P&amp;L scenarios and volatility surfaces. Traders@SMU HW 1.">
 <meta name="theme-color" content="#070b16">
 <link rel="canonical" href="https://ferrsir.github.io/options-pricer/">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Options Premium Pricer">
+<meta property="og:title" content="American Options Pricer">
 <meta property="og:description" content="Black-Scholes-Merton, American binomial tree, Longstaff-Schwartz, Greeks, implied volatility and volatility surfaces. Enter any premium and see how everything reacts.">
 <meta property="og:url" content="https://ferrsir.github.io/options-pricer/">
 <meta property="og:image" content="https://ferrsir.github.io/options-pricer/assets/ndx_surface.png">
@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=13">
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
 </head>
 <body>
@@ -51,9 +51,9 @@
 </svg>
 
 <header class="top glass">
-  <a class="brand" href="./" aria-label="Options Premium Pricer, home">
+  <a class="brand" href="./" aria-label="American Options Pricer, home">
     <span class="logo" aria-hidden="true"><svg viewBox="0 0 32 32" width="24" height="24"><path d="M5 24 L13 12 L19 18 L27 7" fill="none" stroke="#f5b13d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-    <span class="brand-text"><b>Options Premium Pricer</b><small>Black-Scholes · American tree · LSMC · Greeks · Vol surface</small></span>
+    <span class="brand-text"><b>American Options Pricer</b><small>Binomial tree · LSMC · Greeks · Vol surface</small></span>
   </a>
   <nav class="top-links" aria-label="Site">
     <span class="pill" id="dataPill" title="Where market data comes from"><i class="dot" aria-hidden="true"></i><span id="dataPillText">checking data…</span></span>
@@ -77,8 +77,12 @@
         <p id="tickerStatus" class="hint" role="status">Type any stock, ETF or index that has listed options (AAPL, PLTR, SPY, SPX…) to pull spot, rate, dividend yield and 30-day implied vol.</p>
         <div id="volChips" class="chips" hidden></div>
         <div id="chainPick" hidden>
-          <label class="fld"><span class="lbl">Expiry</span><select id="expirySel"></select></label>
-          <label class="fld"><span class="lbl">Contract</span><select id="strikeSel"></select></label>
+          <details class="adv">
+            <summary>Advanced: copy a real listed option</summary>
+            <p class="hint">Not needed. An <b>expiry</b> is the date an option ends; a <b>contract</b> is a strike price with its real bid/ask. Picking one copies its strike, days left and market price into the boxes below.</p>
+            <label class="fld"><span class="lbl">Real expiry</span><select id="expirySel"></select></label>
+            <label class="fld"><span class="lbl">Real contract</span><select id="strikeSel"></select></label>
+          </details>
         </div>
       </div>
     </details>
@@ -97,8 +101,8 @@
           </div>
         </div>
         <div class="seg" role="group" aria-label="Exercise style">
-          <button type="button" data-k="style" data-v="european" class="on" aria-pressed="true">European</button>
-          <button type="button" data-k="style" data-v="american" aria-pressed="false">American</button>
+          <button type="button" data-k="style" data-v="european" aria-pressed="false">European</button>
+          <button type="button" data-k="style" data-v="american" class="on" aria-pressed="true">American</button>
         </div>
         <div class="grid2">
           <div class="fld"><div class="lbl"><label for="S">Spot S</label><button type="button" class="tip" data-tip="Spot: today’s price of the stock or index." aria-label="About spot"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in pre"><input id="S" type="number" inputmode="decimal" step="any" value="100"><i class="u">$</i></span></div>
@@ -115,8 +119,9 @@
     <details class="acc" open id="premSection">
       <summary><svg class="ic"><use href="#i-scale"/></svg>Your premium<svg class="ic chev"><use href="#i-chev"/></svg></summary>
       <div class="acc-body">
-        <div class="fair" id="fairBox" hidden><div><small>Model fair value at model σ <span id="fairSig">—</span></small><b id="fairVal">—</b></div><button type="button" class="chip" id="fairUse">Start from this</button></div>
+        <div class="fair" id="fairBox" hidden><div><small>Recommended premium: the model’s fair price at model σ <span id="fairSig">—</span></small><b id="fairVal">—</b></div><button type="button" class="chip" id="fairUse">Use recommended</button></div>
         <div class="fld"><div class="lbl"><label for="premium">Price you’re offered, per share</label><button type="button" class="tip" data-tip="The option’s price per share (a contract is 100 shares). Enter what you are being offered to see whether it is cheap or rich versus the model." aria-label="About premium"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in pre"><input id="premium" type="number" inputmode="decimal" step="any" min="0" placeholder="Type a premium to test…"><i class="u">$</i></span></div>
+        <p class="hint" id="premAutoNote"></p>
         <input id="premSlider" class="premslide" type="range" min="0" max="10" step="0.01" value="0" aria-label="Drag to change the premium">
         <div class="chips" id="premChips">
           <button type="button" class="chip" data-p="model" title="Set the premium to the model price at the model σ">= model</button>
@@ -160,8 +165,8 @@
       <button type="button" class="x" id="welcomeClose" aria-label="Dismiss the start-here guide"><svg class="ic"><use href="#i-x"/></svg></button>
       <h2 id="welcomeTitle">Price an option in three steps</h2>
       <ol class="steps">
-        <li><b>Set the contract</b><span>Type the numbers on the left, or load any optionable ticker.</span></li>
-        <li><b>Enter a premium</b><span>Type the price you are being offered. See if it is cheap or rich, and the volatility it implies.</span></li>
+        <li><b>Load a stock</b><span>Type any ticker with listed options and press Load. The price, rates, volatility and a normal near-the-money option are filled in for you.</span></li>
+        <li><b>Change the recommended premium</b><span>The model’s fair price is already in the premium box. Type a different one (or drag the slider) and watch the implied volatility, Greeks, charts and surfaces react.</span></li>
         <li><b>Explore the tabs</b><span>Greeks, payoff, what-if P&amp;L, the volatility surface. Every term is explained in the Guide.</span></li>
       </ol>
       <div class="row wrap">
@@ -341,6 +346,6 @@
 <div id="tooltip" role="tooltip" aria-hidden="true"></div>
 <div id="toast" role="status" aria-live="polite"></div>
 
-<script type="module" src="js/app.js?v=11"></script>
+<script type="module" src="js/app.js?v=13"></script>
 </body>
 </html>
