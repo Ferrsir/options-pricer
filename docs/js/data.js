@@ -5,10 +5,10 @@
 //   2. Bundled snapshots in ./data/snapshots.json (real Yahoo data captured when the site was built)
 //   3. Manual entry
 
-import { buildSurface } from './surface.js?v=10';
+import { buildSurface } from './surface.js?v=11';
 
 const LS_KEY = 'pricer.apiBase';
-// Public any-ticker API (serverless/, deployed once). Empty until deployed; the page then falls back to the bundled snapshots.
+// Public any-ticker API (serverless/, deployed on Vercel). If it is unreachable the page falls back to the bundled snapshots.
 export const DEFAULT_API = 'https://options-pricer-api-five.vercel.app'; // serverless/ deployed on Vercel (Cboe delayed chains, any optionable ticker)
 let snapshots = null;
 let caps = {};
@@ -49,7 +49,7 @@ export const apiCaps = () => caps;
 
 export async function loadSnapshots() {
   if (snapshots) return snapshots;
-  try { snapshots = await getJson('./data/snapshots.json?v=10'); } catch { snapshots = {}; }
+  try { snapshots = await getJson('./data/snapshots.json?v=11'); } catch { snapshots = {}; }
   return snapshots;
 }
 
@@ -75,7 +75,9 @@ export async function getChain(ticker, expiry) {
   return getJson(`${base}/api/chain?ticker=${encodeURIComponent(norm(ticker))}&expiry=${encodeURIComponent(expiry)}`);
 }
 
-export async function getSurface(ticker) {
+// opts.maxDays / opts.kRange widen the surface so it covers a specific contract (a long-dated option or a far strike would otherwise sit
+// off the edge of the default 14-160 day, -0.15..+0.10 log-moneyness window). Only the serverless-chains path can honour them.
+export async function getSurface(ticker, opts = {}) {
   const sym = norm(ticker || 'demo');
   const base = await detectApi();
   const snap = async () => { const sn = await loadSnapshots(); const s = sn[sym] || (sym === 'DEMO' ? sn.DEMO : null); return s && s.surface ? { ...s.surface, source: 'snapshot' } : null; };
@@ -83,8 +85,10 @@ export async function getSurface(ticker) {
     try {
       if (caps.surface) return { ...(await getJson(`${base}/api/surface?ticker=${encodeURIComponent(sym)}`, 90000)), source: 'live' };
       // serverless API: it returns compact chains and the browser builds the surface (src/pricer/surface.py ported to js/surface.js)
-      const payload = await getJson(`${base}/api/chains?ticker=${encodeURIComponent(sym)}`, 60000);
-      return { ...buildSurface(payload), source: 'cboe' };
+      const wide = Number.isFinite(opts.maxDays) && opts.maxDays > 160;
+      const q = `ticker=${encodeURIComponent(sym)}${wide ? `&max_days=${Math.min(800, Math.ceil(opts.maxDays))}&max_expiries=20` : ''}`; // the API caps these at 800 days and 20 expiries
+      const payload = await getJson(`${base}/api/chains?${q}`, 60000);
+      return { ...buildSurface(payload, opts.kRange ? { kRange: opts.kRange } : {}), source: 'cboe' };
     } catch (e) { const s = await snap(); if (s) return s; throw e; }
   }
   const s = await snap();

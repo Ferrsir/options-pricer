@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
 </head>
 <body>
@@ -104,7 +104,7 @@
           <div class="fld"><div class="lbl"><label for="S">Spot S</label><button type="button" class="tip" data-tip="Spot: today’s price of the stock or index." aria-label="About spot"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in pre"><input id="S" type="number" inputmode="decimal" step="any" value="100"><i class="u">$</i></span></div>
           <div class="fld"><div class="lbl"><label for="K">Strike K</label><button type="button" class="tip" data-tip="Strike: the fixed price in the contract at which you may buy (call) or sell (put)." aria-label="About strike"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in pre"><input id="K" type="number" inputmode="decimal" step="any" value="100"><i class="u">$</i></span></div>
           <div class="fld"><div class="lbl"><label for="days">Days to expiry</label><button type="button" class="tip" data-tip="Days until the option expires. The math converts to years (days ÷ 365)." aria-label="About days to expiry"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in"><input id="days" type="number" inputmode="decimal" step="any" value="365"><i class="u">d</i></span></div>
-          <div class="fld"><div class="lbl"><label for="sigma">Volatility σ</label><button type="button" class="tip" data-tip="Volatility: how much the price moves per year. 20% means a typical yearly swing of about ±20%. More volatility means a more expensive option." aria-label="About volatility"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in"><input id="sigma" type="number" inputmode="decimal" step="any" value="20"><i class="u">%</i></span></div>
+          <div class="fld"><div class="lbl"><label for="sigma">Model volatility σ</label><button type="button" class="tip" data-tip="Volatility: how much the price moves per year. 20% means a typical yearly swing of about ±20%. More volatility means a more expensive option. When you load a ticker this box is filled with the market’s 30-day implied vol (the script’s suggestion); type your own number to use your own view. It sets the model fair value." aria-label="About volatility"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in"><input id="sigma" type="number" inputmode="decimal" step="any" value="20"><i class="u">%</i></span></div>
           <div class="fld"><div class="lbl"><label for="r">Risk-free rate r</label><button type="button" class="tip" data-tip="What a safe deposit earns per year (the ticker fill uses the 13-week T-bill). It discounts the strike you pay later." aria-label="About the risk-free rate"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in"><input id="r" type="number" inputmode="decimal" step="any" value="5"><i class="u">%</i></span></div>
           <div class="fld"><div class="lbl"><label for="q">Dividend yield q</label><button type="button" class="tip" data-tip="Cash the stock pays out per year as a % of its price. Option holders don’t receive it, so a higher yield lowers call prices and raises put prices." aria-label="About dividend yield"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in"><input id="q" type="number" inputmode="decimal" step="any" value="0"><i class="u">%</i></span></div>
         </div>
@@ -115,11 +115,11 @@
     <details class="acc" open id="premSection">
       <summary><svg class="ic"><use href="#i-scale"/></svg>Your premium<svg class="ic chev"><use href="#i-chev"/></svg></summary>
       <div class="acc-body">
-        <div class="fair" id="fairBox" hidden><div><small>Model fair value at your σ <span id="fairSig">—</span></small><b id="fairVal">—</b></div><button type="button" class="chip" id="fairUse">Start from this</button></div>
+        <div class="fair" id="fairBox" hidden><div><small>Model fair value at model σ <span id="fairSig">—</span></small><b id="fairVal">—</b></div><button type="button" class="chip" id="fairUse">Start from this</button></div>
         <div class="fld"><div class="lbl"><label for="premium">Price you’re offered, per share</label><button type="button" class="tip" data-tip="The option’s price per share (a contract is 100 shares). Enter what you are being offered to see whether it is cheap or rich versus the model." aria-label="About premium"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in pre"><input id="premium" type="number" inputmode="decimal" step="any" min="0" placeholder="Type a premium to test…"><i class="u">$</i></span></div>
         <input id="premSlider" class="premslide" type="range" min="0" max="10" step="0.01" value="0" aria-label="Drag to change the premium">
         <div class="chips" id="premChips">
-          <button type="button" class="chip" data-p="model" title="Set the premium to the model price at your σ">= model</button>
+          <button type="button" class="chip" data-p="model" title="Set the premium to the model price at the model σ">= model</button>
           <button type="button" class="chip" data-p="-0.25" title="Premium = model price −25%">−25%</button>
           <button type="button" class="chip" data-p="-0.1" title="Premium = model price −10%">−10%</button>
           <button type="button" class="chip" data-p="0.1" title="Premium = model price +10%">+10%</button>
@@ -127,10 +127,10 @@
           <button type="button" class="chip" data-p="clear">Clear</button>
         </div>
         <div class="basis">
-          <div class="lbl"><span>Greeks, surfaces and scenarios use</span><button type="button" class="tip" data-tip="A premium different from the model price implies a different volatility. Choose whether the Greeks, the Greek surface, the payoff, What-if and the vol-surface marker are computed at THAT volatility (the market’s view) or at your own σ. The model fair value always uses your σ." aria-label="About this switch"><svg class="ic sm"><use href="#i-info"/></svg></button></div>
+          <div class="lbl"><span>Greeks, surfaces and scenarios use</span><button type="button" class="tip" data-tip="A premium different from the model price implies a different volatility. Choose whether the Greeks, the Greek surface, the payoff, What-if and the vol-surface marker are computed at THAT volatility (the market’s view) or at the model σ (the σ box: it starts as the script’s suggestion, the market’s 30-day implied vol, and you can overwrite it with your own view). The model fair value always uses the model σ." aria-label="About this switch"><svg class="ic sm"><use href="#i-info"/></svg></button></div>
           <div class="seg" role="group" aria-label="Volatility used for Greeks, surfaces and scenarios" id="basisSeg">
-            <button type="button" data-k="basis" data-v="market" class="on" aria-pressed="true">Premium’s σ</button>
-            <button type="button" data-k="basis" data-v="model" aria-pressed="false">My σ</button>
+            <button type="button" data-k="basis" data-v="market" class="on" aria-pressed="true">My premium’s σ</button>
+            <button type="button" data-k="basis" data-v="model" aria-pressed="false">Model σ</button>
           </div>
           <p class="hint" id="basisNote"></p>
         </div>
@@ -228,7 +228,7 @@
         </div>
         <div class="card glass">
           <h3>How each number reacts as the premium changes</h3>
-          <p class="hint" style="margin-top:-6px">Every point on these curves re-solves the implied vol for that premium and recomputes the Greeks at it (Black-Scholes). The <span class="key-white">white dashed line</span> is the model price at your σ; the <span class="key-amber">amber line</span> is your premium.</p>
+          <p class="hint" style="margin-top:-6px">Every point on these curves re-solves the implied vol for that premium and recomputes the Greeks at it (Black-Scholes). The <span class="key-white">white dashed line</span> is the model price at the model σ; the <span class="key-amber">amber line</span> is your premium.</p>
           <div id="impactGrid" class="greekgrid"></div>
         </div>
       </div>
@@ -240,7 +240,7 @@
           <label class="inline">X axis
             <select id="greekX"><option value="spot">Spot price</option><option value="time">Days to expiry</option><option value="vol">Volatility</option></select>
           </label>
-          <label class="inline" id="greekLinesWrap" hidden>Lines <select id="greekLines"><option value="compare">My σ vs premium’s σ</option><option value="matur">By maturity</option></select></label>
+          <label class="inline" id="greekLinesWrap" hidden>Lines <select id="greekLines"><option value="compare">Model σ vs my premium’s σ</option><option value="matur">By maturity</option></select></label>
           <span class="hint" id="greekHint"></span>
         </div>
         <div id="greekGrid" class="greekgrid"></div>
@@ -251,7 +251,7 @@
           <label class="inline">Greek
             <select id="greek3d"><option>delta</option><option selected>gamma</option><option>vega</option><option>theta</option><option>rho</option><option>vanna</option><option>volga</option></select>
           </label>
-          <label class="inline" id="greekSurfModeWrap" hidden>View <select id="greekSurfMode"><option value="premium">At premium’s σ</option><option value="model">At my σ</option><option value="diff">Difference</option></select></label>
+          <label class="inline" id="greekSurfModeWrap" hidden>View <select id="greekSurfMode"><option value="premium">At my premium’s σ</option><option value="model">At model σ</option><option value="diff">Difference</option></select></label>
         </div>
         <div id="greekSurface" class="plot tall"></div>
       </div>
@@ -341,6 +341,6 @@
 <div id="tooltip" role="tooltip" aria-hidden="true"></div>
 <div id="toast" role="status" aria-live="polite"></div>
 
-<script type="module" src="js/app.js?v=10"></script>
+<script type="module" src="js/app.js?v=11"></script>
 </body>
 </html>

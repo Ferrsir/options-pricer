@@ -1,5 +1,5 @@
-import * as P from './pricing.js?v=10';
-import * as D from './data.js?v=10';
+import * as P from './pricing.js?v=11';
+import * as D from './data.js?v=11';
 
 const $ = (id) => document.getElementById(id);
 const state = { type: 'call', side: 'long', style: 'european', chain: null, chainExpiry: null, ticker: '', tab: 'overview', lsmc: null, basis: 'market', iv: NaN, surf: null };
@@ -12,8 +12,8 @@ const pct = (x, d = 2) => (Number.isFinite(x) ? (x * 100).toFixed(d) + '%' : '�
 const sgn = () => (state.side === 'long' ? 1 : -1);
 
 // Two volatilities live side by side:
-//   raw.sigma / p.sigmaModel = the σ typed in the input box ("my view"); it sets the model fair value.
-//   p.sigma                  = the analysis σ: the σ implied by the premium when the switch says "Premium's σ", else the same as mine.
+//   raw.sigma / p.sigmaModel = the σ in the input box (the "model σ": the script fills it with the 30-day implied vol, you may overwrite it); it sets the model fair value.
+//   p.sigma                  = the analysis σ: the σ implied by the premium when the switch says "My premium's σ", else the same as the model σ.
 function readRaw() {
   const v = (id) => parseFloat($(id).value);
   return { S: v('S'), K: v('K'), T: v('days') / 365, r: v('r') / 100, sigma: v('sigma') / 100, q: v('q') / 100, steps: parseInt($('steps').value, 10), kind: state.type, style: state.style };
@@ -83,7 +83,7 @@ function renderHero() {
   const probItm = p.kind === 'call' ? P.N(d2) : P.N(-d2);
   const tv = price - c.intrinsic;
   const cards = [
-    ['main', `${p.style === 'american' ? 'American' : 'European'} ${p.kind} fair value`, fmt(price, 4), `model price at your σ ${pct(raw.sigma, 1)}`],
+    ['main', `${p.style === 'american' ? 'American' : 'European'} ${p.kind} fair value`, fmt(price, 4), `model price at model σ ${pct(raw.sigma, 1)}`],
     ['', 'Intrinsic value', fmt(c.intrinsic, 4), c.intrinsic > 0 ? 'in the money' : 'out of the money'],
     ['', 'Time value', fmt(tv, 4), `${((tv / price) * 100 || 0).toFixed(0)}% of premium`],
     ['', 'Breakeven (model)', fmt(be, 2), `at expiry (${pct((be - p.S) / p.S, 1)} from spot)`],
@@ -98,14 +98,14 @@ function renderOverview() {
   const epe = m.am.price - m.eu.price;
   const mkt = parseFloat($('premium').value);
   const rows = [
-    ['Black-Scholes-Merton (closed form)', m.bsm, `European benchmark at your σ ${pct(raw.sigma, 1)}`],
+    ['Black-Scholes-Merton (closed form)', m.bsm, `European benchmark at model σ ${pct(raw.sigma, 1)}`],
     [`European tree (${p.steps} steps)`, m.eu.price, `error vs BSM ${(m.eu.price - m.bsm >= 0 ? '+' : '') + (m.eu.price - m.bsm).toFixed(5)}`],
     [`American tree (${p.steps} steps)`, m.am.price, `early-exercise premium ${(epe >= 0 ? '+' : '') + epe.toFixed(4)}`],
   ];
   if (state.lsmc) rows.push([`American LSMC (${state.lsmc.paths.toLocaleString()} paths)`, state.lsmc.price, `± ${(1.96 * state.lsmc.se).toFixed(4)} (95%); biased slightly low`]);
   if (Number.isFinite(mkt)) {
     const model = modelPrice();
-    rows.push(['Your premium', mkt, `model − premium = ${(model - mkt >= 0 ? '+' : '') + (model - mkt).toFixed(4)} at your σ ${pct(raw.sigma, 1)}`]);
+    rows.push(['Your premium', mkt, `model − premium = ${(model - mkt >= 0 ? '+' : '') + (model - mkt).toFixed(4)} at model σ ${pct(raw.sigma, 1)}`]);
   }
   $('modelTable').innerHTML = `<tr><th>Model</th><th class="num">Premium</th><th>Note</th></tr>` +
     rows.map(([n, v, why]) => `<tr><td>${n}</td><td class="num">${fmt(v, 4)}</td><td class="why">${why}</td></tr>`).join('');
@@ -142,25 +142,25 @@ function renderGreeks() {
   const grid = $('greekGrid');
   if (!grid.children.length) Object.keys(GREEK_LABELS).forEach((k) => { const d = document.createElement('div'); d.className = 'g'; d.id = 'g-' + k; grid.appendChild(d); });
   const day = 1 / 365, mine = raw.sigma, theirs = state.iv, prem = getPremium();
-  const cmpSeries = (mk) => [{ name: `My σ ${pct(mine, 1)}`, dash: 'dash', color: TXT, f: mk(mine) }, { name: `Premium’s σ ${pct(theirs, 1)}`, color: COLORS[0], f: mk(theirs) }];
+  const cmpSeries = (mk) => [{ name: `Model σ ${pct(mine, 1)}`, dash: 'dash', color: TXT, f: mk(mine) }, { name: `My premium’s σ ${pct(theirs, 1)}`, color: COLORS[0], f: mk(theirs) }];
   let xs, series, xTitle, hint, vlines;
   if (mode === 'spot') {
     xs = linspace(Math.min(0.6 * p.K, 0.8 * p.S), Math.max(1.4 * p.K, 1.2 * p.S), 160); xTitle = 'Spot'; // always include today's spot, even when it is far from the strike
     vlines = [{ x: p.K, color: '#e5484d' }, ...(Math.abs(p.S - p.K) > 1e-9 ? [{ x: p.S, color: TXT, dash: 'dot' }] : [])];
     series = useCmp ? cmpSeries((sg) => (x) => [x, p.T, sg])
       : [0.1, 0.25, 0.5, 1].map((f) => ({ name: `${Math.max(Math.round(p.T * 365 * f), 1)}d`, f: (x) => [x, Math.max(p.T * f, day), p.sigma] }));
-    hint = (useCmp ? 'Dashed lines = your σ, solid = the σ your premium implies. Same contract and expiry, so the gap is exactly what the premium changes.'
+    hint = (useCmp ? 'Dashed lines = the model σ, solid = the σ your premium implies. Same contract and expiry, so the gap is exactly what the premium changes.'
       : 'One line per time to expiry. Gamma spikes at the strike and sharpens as expiry nears.') + ` Red dashed = strike${Math.abs(p.S - p.K) > 1e-9 ? ', white dotted = today’s spot' : ''}.`;
   } else if (mode === 'time') {
     xs = linspace(1, Math.max(p.T * 365, 2), 160); xTitle = 'Days to expiry'; vlines = [];
     series = useCmp ? cmpSeries((sg) => (x) => [p.S, x / 365, sg])
       : [0.9, 1, 1.1].map((m) => ({ name: `S = ${(m * p.K).toFixed(1)}`, f: (x) => [m * p.K, x / 365, p.sigma] }));
-    hint = useCmp ? 'At today’s spot. Dashed = your σ, solid = the premium’s σ.' : 'One line per moneyness. Theta and gamma blow up for at-the-money options as expiry approaches.';
+    hint = useCmp ? 'At today’s spot. Dashed = model σ, solid = my premium’s σ.' : 'One line per moneyness. Theta and gamma blow up for at-the-money options as expiry approaches.';
   } else {
     xs = linspace(0.05, 0.9, 160); xTitle = 'Volatility';
     vlines = cmp ? [{ x: mine, color: TXT }, { x: theirs, color: COLORS[0], dash: 'solid' }] : [{ x: p.sigma, color: '#e5484d' }];
     series = [0.9, 1, 1.1].map((m) => ({ name: `S = ${(m * p.K).toFixed(1)}`, f: (x) => [m * p.K, p.T, x] }));
-    hint = cmp ? 'White dashed line = your σ, amber line = the σ your premium implies: read each Greek where the lines cross.' : 'Vega peaks near the money; higher vol pushes delta towards 0.5 and shrinks gamma.';
+    hint = cmp ? 'White dashed line = the model σ, amber line = the σ your premium implies: read each Greek where the lines cross.' : 'Vega peaks near the money; higher vol pushes delta towards 0.5 and shrinks gamma.';
   }
   $('greekHint').textContent = hint;
   for (const name of Object.keys(GREEK_LABELS)) {
@@ -189,7 +189,7 @@ function renderGreekSurface() {
     const a = zAt(premiumSigma), b = zAt(raw.sigma);
     z = a.map((row, i) => row.map((v, j) => v - b[i][j]));
     colorscale = [[0, '#fb7185'], [0.5, '#22304b'], [1, '#34d399']]; extra = { cmid: 0, showscale: true, colorbar: { thickness: 12, len: 0.6 } };
-    zTitle = `${zTitle}: premium’s σ minus my σ`;
+    zTitle = `${zTitle}: my premium’s σ minus model σ`;
   } else z = zAt(view === 'model' ? raw.sigma : premiumSigma);
   draw('greekSurface', [{ type: 'surface', x: S, y: T, z, colorscale, showscale: false, contours: { z: { show: true, usecolormap: true, project: { z: false } } }, ...extra }],
     baseLayout({ margin: { l: 0, r: 0, t: 10, b: 0 }, scene: sceneStyle('Spot', 'Time to expiry (y)', zTitle) }));
@@ -211,8 +211,8 @@ function renderPayoff() {
   const traces = [
     { x: xs, y: at(0), name: 'At expiry', line: { color: COLORS[0], width: 2.5 } },
     { x: xs, y: at(p.T / 2), name: 'Halfway to expiry', line: { color: '#a9cf3f', width: 1.6, dash: 'dot' } },
-    { x: xs, y: at(p.T), name: p.sigma !== c.raw.sigma ? `Today at premium’s σ ${pct(p.sigma, 1)}` : 'Today', line: { color: '#4aa3df', width: 2 } },
-    ...(p.sigma !== c.raw.sigma ? [{ x: xs, y: xs.map((x) => s * (P.bsmPrice(x, p.K, p.T, p.r, c.raw.sigma, p.q, p.kind) - paid)), name: `Today at my σ ${pct(c.raw.sigma, 1)}`, line: { color: TXT, width: 1.4, dash: 'dash' } }] : []),
+    { x: xs, y: at(p.T), name: p.sigma !== c.raw.sigma ? `Today at my premium’s σ ${pct(p.sigma, 1)}` : 'Today', line: { color: '#4aa3df', width: 2 } },
+    ...(p.sigma !== c.raw.sigma ? [{ x: xs, y: xs.map((x) => s * (P.bsmPrice(x, p.K, p.T, p.r, c.raw.sigma, p.q, p.kind) - paid)), name: `Today at model σ ${pct(c.raw.sigma, 1)}`, line: { color: TXT, width: 1.4, dash: 'dash' } }] : []),
   ].map((t) => ({ ...t, mode: 'lines' }));
   draw('payoffPlot', traces, baseLayout({ title: `${state.side} ${p.kind} K=${p.K}, premium ${fmt(paid, 2)}`, xaxis: { title: 'Underlying price', gridcolor: GRID }, yaxis: { title: 'Profit / loss per share', gridcolor: GRID, zerolinecolor: ZERO },
     shapes: [{ type: 'line', x0: p.S, x1: p.S, yref: 'paper', y0: 0, y1: 1, line: { color: '#e5484d', dash: 'dash', width: 1 } }, { type: 'line', x0: be, x1: be, yref: 'paper', y0: 0, y1: 1, line: { color: '#3fae78', dash: 'dot', width: 1 } }],
@@ -284,7 +284,7 @@ let guideLoaded = false;
 async function loadGuide() {
   if (guideLoaded) return;
   try {
-    const r = await fetch('./guide.html?v=10'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const r = await fetch('./guide.html?v=11'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
     $('guideText').innerHTML = await r.text(); guideLoaded = true;
   } catch (e) { $('guideText').innerHTML = `<p class="hint bad">Could not load the guide (${e.message}). It is also in the repository as GUIDE.md.</p>`; }
 }
@@ -294,11 +294,26 @@ async function loadSurface() {
   const t = ($('surfTicker').value || 'NDX').trim();
   $('loadSurface').disabled = true; $('surfStatus').className = 'hint'; $('surfStatus').textContent = 'Building surface…';
   try {
-    const s = await D.getSurface(t);
-    state.surf = s; drawSurface(s);
+    // if the surface is for the ticker you loaded, make it wide enough to include your contract (see getSurface)
+    const sym = t.toUpperCase().replace('^', ''), own = cache && state.ticker && sym === state.ticker.toUpperCase().replace('^', '');
+    const kc = own ? Math.log(cache.raw.K / cache.raw.S) : 0;
+    const opts = own ? { maxDays: Math.ceil(cache.raw.T * 365) + 30, kRange: [Math.max(-0.25, Math.min(-0.15, kc - 0.03)), Math.min(0.2, Math.max(0.1, kc + 0.03))] } : {};
+    const s = await D.getSurface(t, opts);
+    state.surf = s; state.surfSym = sym; state.surfKey = own ? contractKey() : '';
+    drawSurface(s);
     $('surfStatus').textContent = `${s.label} · spot ${s.spot.toLocaleString()} · ${s.asof} · ${({ live: 'live data', cboe: 'live data (Cboe, 15-min delayed)', snapshot: 'bundled snapshot' }[s.source] || 'live data')}`;
   } catch (e) { $('surfStatus').className = 'hint bad'; $('surfStatus').textContent = e.message; }
   $('loadSurface').disabled = false;
+}
+// does the surface reach this contract? (a 2-day / 0.005 log-moneyness tolerance: the contract's T is computed a few minutes after the surface's)
+const surfaceCovers = (s, k, T) => k >= s.k[0] - 0.005 && k <= s.k[s.k.length - 1] + 0.005 && T >= s.T[0] - 0.005 && T <= s.T[s.T.length - 1] + 0.005;
+const contractKey = () => (cache && state.ticker ? `${state.ticker.toUpperCase().replace('^', '')}|${Math.round(cache.raw.T * 365)}|${Math.log(cache.raw.K / cache.raw.S).toFixed(2)}` : '');
+// the surface on screen belongs to the loaded ticker but your contract now lies off its edge: rebuild it once for this contract (the key stops a loop if the data simply is not there)
+function maybeWidenSurface() {
+  const s = state.surf, c = cache;
+  if (!s || !c || !(getPremium() > 0) || !state.ticker || state.surfSym !== state.ticker.toUpperCase().replace('^', '') || state.surfKey === contractKey()) return;
+  const k = Math.log(c.raw.K / c.raw.S), T = c.raw.T;
+  if (!surfaceCovers(s, k, T)) { state.surfKey = contractKey(); loadSurface(); }
 }
 // where the user's own premium sits on the market surface (its implied vol at this strike and maturity)
 function userPoint(s, zmin, zmax) {
@@ -306,7 +321,7 @@ function userPoint(s, zmin, zmax) {
   note.hidden = true;
   if (!c || !Number.isFinite(state.iv) || !(getPremium() > 0)) return null;
   const k = Math.log(c.raw.K / c.raw.S), T = c.raw.T, iv = state.iv * 100;
-  const inRange = k >= s.k[0] && k <= s.k[s.k.length - 1] && T >= s.T[0] && T <= s.T[s.T.length - 1];
+  const inRange = surfaceCovers(s, k, T);
   const fits = iv >= zmin - 5 && iv <= zmax * 1.6;
   note.hidden = false;
   note.textContent = `Your premium implies ${iv.toFixed(1)}% vol at ln(K/S) = ${k.toFixed(3)} and ${(T * 365).toFixed(0)} days${inRange ? '' : ' (outside this surface’s strike or maturity range)'}${fits ? '' : '; that is off this chart’s vol scale, so it is not plotted'}. Compare it with the surface only if your inputs describe the same stock or index.`;
@@ -409,10 +424,10 @@ function syncBasisUI() {
   const prem = getPremium(), ok = Number.isFinite(state.iv) && state.iv > 0, raw = readRaw();
   document.querySelector('.seg button[data-k="basis"][data-v="market"]').disabled = !ok;
   const note = $('basisNote');
-  if (!Number.isFinite(prem)) note.textContent = 'Type a premium (or press “Start from this”) to compare it with your σ.';
-  else if (!ok) note.textContent = 'This premium is outside the no-arbitrage bounds, so no volatility fits it. Everything uses your σ.';
-  else if (state.basis === 'market') note.textContent = `Greeks, payoff, what-if and the Greek surface use ${pct(state.iv, 2)}, the σ implied by your premium. The fair value above still uses your σ (${pct(raw.sigma, 2)}).`;
-  else note.textContent = `Greeks, payoff, what-if and the Greek surface use your σ (${pct(raw.sigma, 2)}). Your premium implies ${pct(state.iv, 2)}.`;
+  if (!Number.isFinite(prem)) note.textContent = 'Type a premium (or press “Start from this”) to compare it with the model σ.';
+  else if (!ok) note.textContent = 'This premium is outside the no-arbitrage bounds, so no volatility fits it. Everything uses the model σ.';
+  else if (state.basis === 'market') note.textContent = `Greeks, payoff, what-if and the Greek surface use ${pct(state.iv, 2)}, the σ implied by your premium. The fair value above still uses the model σ (${pct(raw.sigma, 2)}).`;
+  else note.textContent = `Greeks, payoff, what-if and the Greek surface use the model σ (${pct(raw.sigma, 2)}). Your premium implies ${pct(state.iv, 2)}.`;
 }
 function renderFair() {
   const c = cache, box = $('fairBox');
@@ -433,7 +448,7 @@ function renderIvBox() {
   if (!(prem > 0)) { box.textContent = 'Enter a premium above 0.'; return; }
   if (!Number.isFinite(iv)) { box.textContent = 'No volatility reproduces this premium: it is outside the no-arbitrage bounds (below intrinsic/forward value or above the underlying).'; return; }
   const same = Math.abs(iv - raw.sigma) < 5e-4; // within 0.05 vol points: the same number at the precision shown, so do not claim "more" or "less"
-  box.innerHTML = `Implied vol (${raw.style}): <b>${(iv * 100).toFixed(2)}%</b> <button class="chip" id="useIv">use as my σ</button><br><span class="hint">vs your σ ${(raw.sigma * 100).toFixed(1)}% → ${same ? 'this premium matches the vol you entered' : iv > raw.sigma ? 'this premium prices in MORE vol than your input' : 'this premium prices in LESS vol than your input'}</span>`;
+  box.innerHTML = `Implied vol (${raw.style}): <b>${(iv * 100).toFixed(2)}%</b> <button class="chip" id="useIv">use as model σ</button><br><span class="hint">vs model σ ${(raw.sigma * 100).toFixed(1)}% → ${same ? 'this premium matches the model σ' : iv > raw.sigma ? 'this premium prices in MORE vol than the model σ' : 'this premium prices in LESS vol than the model σ'}</span>`;
   $('useIv').onclick = () => { $('sigma').value = +(iv * 100).toFixed(3); update(); };
 }
 function syncSlider() {
@@ -459,9 +474,9 @@ function volContext(p, raw, iv) {
   if (!Number.isFinite(iv) || !(raw.sigma > 0) || Math.abs(iv - raw.sigma) / raw.sigma < 0.15) return '';
   if (iv > raw.sigma) {
     if (p.kind === 'put' && Math.log(p.K / p.S) < -0.03) return 'Why “rich”? Out-of-the-money puts normally trade above the at-the-money vol (this is called skew): buyers pay extra for crash protection. So a premium that looks rich against one flat σ can be a normal market price. The Vol surface tab shows the market’s vol at this strike.';
-    return 'Your σ is one flat number, but market vol changes with expiry and strike (an earnings date inside the option’s life, for example, adds to it). The Vol surface tab shows what the market charges at this strike and expiry.';
+    return 'The model σ is one flat number, but market vol changes with expiry and strike (an earnings date inside the option’s life, for example, adds to it). The Vol surface tab shows what the market charges at this strike and expiry.';
   }
-  return 'The market charges less vol for this contract than your σ. Market vol changes with strike and expiry, so one flat σ will not fit every contract; the Vol surface tab shows the market’s vol at this strike and expiry.';
+  return 'The market charges less vol for this contract than the model σ. Market vol changes with strike and expiry, so one flat σ will not fit every contract; the Vol surface tab shows the market’s vol at this strike and expiry.';
 }
 function renderBanner() {
   const box = $('premBanner'), prem = getPremium(), c = cache;
@@ -476,12 +491,12 @@ function renderBanner() {
   const cells = [
     ['lead', 'Your premium', fmt(prem, 4), `$${(prem * 100).toLocaleString('en-US', { maximumFractionDigits: 0 })} per contract · you ${s === 1 ? 'pay' : 'collect'}`, ''],
     ['', 'Edge vs model', Math.abs(edge) < 5e-5 ? '0.0000' : `${edge >= 0 ? '+' : '−'}${fmt(Math.abs(edge), 4)}`, `${Number.isFinite(edgePct) ? (Math.abs(edgePct * 100) < 0.05 ? '0.0' : (edgePct >= 0 ? '+' : '−') + Math.abs(edgePct * 100).toFixed(1)) + '% · ' : ''}${verdict[0]} (σ ${pct(raw.sigma, 1)})`, verdict[1]],
-    ['', 'Implied vol', Number.isFinite(iv) ? pct(iv, 2) : '—', Number.isFinite(iv) ? `vs your σ ${pct(raw.sigma, 1)}` : 'no vol fits this premium', ''],
+    ['', 'Implied vol', Number.isFinite(iv) ? pct(iv, 2) : '—', Number.isFinite(iv) ? `vs model σ ${pct(raw.sigma, 1)}` : 'no vol fits this premium', ''],
     ['', 'Breakeven (your premium)', fmt(be, 2), `${pct((be - p.S) / p.S, 1)} from spot at expiry`, ''],
     ['', 'P(profit)', pct(pr, 1), `at expiry, risk-neutral, σ ${pct(p.sigma, 1)}`, ''],
     ['', 'Max loss / gain', `${maxLoss} / ${maxGain}`, 'per share', ''],
   ];
-  cells.push(['', `Greeks & charts at σ ${pct(p.sigma, 1)}`, `<button class="chip" id="toImpact2">See how they change →</button>`, p.sigma !== raw.sigma ? 'the σ your premium implies' : 'your own σ', '']);
+  cells.push(['', `Greeks & charts at σ ${pct(p.sigma, 1)}`, `<button class="chip" id="toImpact2">See how they change →</button>`, p.sigma !== raw.sigma ? 'the σ your premium implies' : 'the model σ', '']);
   box.hidden = false;
   const ctx = volContext(p, raw, iv);
   box.innerHTML = cells.map(([cls, k, v, sub, tone]) => `<div class="cell ${cls}"><div class="k">${k}</div><div class="v ${tone}">${v}</div><div class="s">${sub}</div></div>`).join('') + (ctx ? `<div class="note" id="volContext">${ctx}</div>` : '');
@@ -525,7 +540,7 @@ function impactTableHTML() {
   ];
   const be = probProfit(p, prem).be;
   state.impactRows = { a, b };
-  return `<table class="tbl"><tr><th></th><th class="num">Model (your σ)</th><th class="num">Market (σ implied by ${fmt(prem, 2)})</th><th class="num">Change</th></tr>` +
+  return `<table class="tbl"><tr><th></th><th class="num">Model σ ${pct(a.sigma, 1)}</th><th class="num">My premium (σ implied by ${fmt(prem, 2)})</th><th class="num">Change</th></tr>` +
     rows.map(([k, x, y, d]) => `<tr><td>${k}</td><td class="num">${x}</td><td class="num">${y}</td><td class="num">${d}</td></tr>`).join('') +
     `<tr><td>Breakeven at expiry</td><td class="num" colspan="2" style="text-align:center">${fmt(be, 2)} (depends only on your premium)</td><td></td></tr></table>`;
 }
@@ -536,7 +551,7 @@ function impactNotesHTML() {
     `<li><b>Why the numbers move.</b> An option’s price rises with volatility and with nothing else you can vary here, so a premium different from the model price can only be explained by a <b>${dir} volatility</b>: <b>${pct(b.sigma, 1)}</b> instead of ${pct(a.sigma, 1)}. Every Greek is then re-evaluated at that volatility.</li>`,
     `<li><b>Delta</b> goes from ${fmt(a.delta, 3)} to ${fmt(b.delta, 3)}, <b>gamma</b> from ${fmt(a.gamma, 4)} to ${fmt(b.gamma, 4)}, <b>vega</b> from ${fmt(a.vega, 3)} to ${fmt(b.vega, 3)}, <b>theta</b> from ${fmt(a.theta, 3)} to ${fmt(b.theta, 3)} per day.</li>`,
     `<li><b>What did <i>not</i> change:</b> your breakeven, max loss and max gain. Those depend only on the premium and strike, not on any model.</li>`,
-    `<li><b>Read the edge column carefully.</b> At your σ the model says your side ${a.edge >= 0 ? 'gains' : 'loses'} ${fmt(Math.abs(a.edge), 3)} per share by transacting at this premium. At the market’s σ the edge is ${fmt(b.edge, 3)}, i.e. zero by construction. The real question is whether ${pct(b.sigma, 1)} volatility is believable for this contract.</li>`,
+    `<li><b>Read the edge column carefully.</b> At the model σ the model says your side ${a.edge >= 0 ? 'gains' : 'loses'} ${fmt(Math.abs(a.edge), 3)} per share by transacting at this premium. At my premium’s σ the edge is ${fmt(b.edge, 3)}, i.e. zero by construction. The real question is whether ${pct(b.sigma, 1)} volatility is believable for this contract.</li>`,
   ];
   return `<ul>${items.join('')}</ul>`;
 }
@@ -593,7 +608,7 @@ function renderWhatIf() {
   $('wiSpotOut').textContent = `${ds >= 0 ? '+' : ''}${ds}%`;
   $('wiVolOut').textContent = `${dv >= 0 ? '+' : ''}${dv} pts`;
   $('wiDaysOut').textContent = `${dd} of ${daysTotal}`;
-  $('wiBasisNote').textContent = `Scenarios start from σ = ${pct(p.sigma, 2)}${p.sigma !== c.raw.sigma ? ', the volatility implied by your premium' : ' (your σ)'}. ${p.sigma !== c.raw.sigma ? 'Switch to “My σ” in the left panel to value them at your own view instead.' : ''}`;
+  $('wiBasisNote').textContent = `Scenarios start from σ = ${pct(p.sigma, 2)}${p.sigma !== c.raw.sigma ? ', the volatility implied by your premium' : ' (the model σ)'}. ${p.sigma !== c.raw.sigma ? 'Switch to “Model σ” in the left panel to value them at the model σ instead.' : ''}`;
   const paid = paidPremium(), now = effPrice();
   const S1 = p.S * (1 + ds / 100), sig1 = Math.max(0.01, p.sigma + dv / 100), T1 = p.T - dd / 365;
   const val1 = valueAt(p, S1, T1, sig1);
@@ -656,7 +671,7 @@ function update() {
 }
 function renderCurrentTab() {
   if (!cache) return;
-  ({ overview: renderOverview, greeks: renderGreeks, payoff: renderPayoff, whatif: renderWhatIf, impact: renderImpact, tree: renderTree, checks: renderChecks, surface: () => { if (state.surf) drawSurface(state.surf); }, how: () => {}, guide: () => {} }[state.tab])();
+  ({ overview: renderOverview, greeks: renderGreeks, payoff: renderPayoff, whatif: renderWhatIf, impact: renderImpact, tree: renderTree, checks: renderChecks, surface: () => { if (state.surf) { drawSurface(state.surf); maybeWidenSurface(); } }, how: () => {}, guide: () => {} }[state.tab])();
 }
 function setTab(t) {
   state.tab = t;
