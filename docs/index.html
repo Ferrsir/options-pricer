@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
 </head>
 <body>
@@ -115,6 +115,7 @@
     <details class="acc" open id="premSection">
       <summary><svg class="ic"><use href="#i-scale"/></svg>Your premium<svg class="ic chev"><use href="#i-chev"/></svg></summary>
       <div class="acc-body">
+        <div class="fair" id="fairBox" hidden><div><small>Model fair value at your σ <span id="fairSig">—</span></small><b id="fairVal">—</b></div><button type="button" class="chip" id="fairUse">Start from this</button></div>
         <div class="fld"><div class="lbl"><label for="premium">Price you’re offered, per share</label><button type="button" class="tip" data-tip="The option’s price per share (a contract is 100 shares). Enter what you are being offered to see whether it is cheap or rich versus the model." aria-label="About premium"><svg class="ic sm"><use href="#i-info"/></svg></button></div><span class="in pre"><input id="premium" type="number" inputmode="decimal" step="any" min="0" placeholder="Type a premium to test…"><i class="u">$</i></span></div>
         <input id="premSlider" class="premslide" type="range" min="0" max="10" step="0.01" value="0" aria-label="Drag to change the premium">
         <div class="chips" id="premChips">
@@ -125,7 +126,14 @@
           <button type="button" class="chip" data-p="0.25">+25%</button>
           <button type="button" class="chip" data-p="clear">Clear</button>
         </div>
-        <label class="checkline"><input type="checkbox" id="lockIv"><span>Lock σ to this premium’s implied vol</span></label>
+        <div class="basis">
+          <div class="lbl"><span>Greeks, surfaces and scenarios use</span><button type="button" class="tip" data-tip="A premium different from the model price implies a different volatility. Choose whether the Greeks, the Greek surface, the payoff, What-if and the vol-surface marker are computed at THAT volatility (the market’s view) or at your own σ. The model fair value always uses your σ." aria-label="About this switch"><svg class="ic sm"><use href="#i-info"/></svg></button></div>
+          <div class="seg" role="group" aria-label="Volatility used for Greeks, surfaces and scenarios" id="basisSeg">
+            <button type="button" data-k="basis" data-v="market" class="on" aria-pressed="true">Premium’s σ</button>
+            <button type="button" data-k="basis" data-v="model" aria-pressed="false">My σ</button>
+          </div>
+          <p class="hint" id="basisNote"></p>
+        </div>
         <div id="ivReadout" class="ivbox" hidden></div>
       </div>
     </details>
@@ -232,6 +240,7 @@
           <label class="inline">X axis
             <select id="greekX"><option value="spot">Spot price</option><option value="time">Days to expiry</option><option value="vol">Volatility</option></select>
           </label>
+          <label class="inline" id="greekLinesWrap" hidden>Lines <select id="greekLines"><option value="compare">My σ vs premium’s σ</option><option value="matur">By maturity</option></select></label>
           <span class="hint" id="greekHint"></span>
         </div>
         <div id="greekGrid" class="greekgrid"></div>
@@ -242,6 +251,7 @@
           <label class="inline">Greek
             <select id="greek3d"><option>delta</option><option selected>gamma</option><option>vega</option><option>theta</option><option>rho</option><option>vanna</option><option>volga</option></select>
           </label>
+          <label class="inline" id="greekSurfModeWrap" hidden>View <select id="greekSurfMode"><option value="premium">At premium’s σ</option><option value="model">At my σ</option><option value="diff">Difference</option></select></label>
         </div>
         <div id="greekSurface" class="plot tall"></div>
       </div>
@@ -258,6 +268,7 @@
       <div class="card glass">
         <h3>What happens to your position?</h3>
         <p class="hint" style="margin-top:-6px">You entered at your premium. Move the sliders to see the option’s value and your profit or loss after spot, volatility and time change.</p>
+        <p class="hint" id="wiBasisNote"></p>
         <div class="wi-controls">
           <label>Spot move <output id="wiSpotOut">0%</output><input id="wiSpot" type="range" min="-30" max="30" step="0.5" value="0"></label>
           <label>Volatility change <output id="wiVolOut">0 pts</output><input id="wiVol" type="range" min="-20" max="20" step="0.5" value="0"></label>
@@ -288,6 +299,7 @@
           <button id="loadSurface" class="btn primary">Build surface</button>
           <span id="surfStatus" class="hint"></span>
         </div>
+        <p class="hint" id="surfMarkNote" hidden></p>
         <div id="surfacePlot" class="plot xtall"></div>
         <div id="smilePlot" class="plot"></div>
         <p class="hint">Pipeline: log-moneyness k = ln(K/S) → OTM quotes → Black-Scholes implied vols → Savitzky-Golay smoothing per expiry → two-stage PCHIP interpolation (strike, then total variance in time). The red dashed line marks at-the-money.</p>
@@ -329,6 +341,6 @@
 <div id="tooltip" role="tooltip" aria-hidden="true"></div>
 <div id="toast" role="status" aria-live="polite"></div>
 
-<script type="module" src="js/app.js?v=5"></script>
+<script type="module" src="js/app.js?v=6"></script>
 </body>
 </html>

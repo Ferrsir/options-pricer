@@ -153,7 +153,8 @@
 <ul>
 <li><strong>= model, ±10%, ±25%</strong> buttons: jump to the model price, or a price that much above or below it.</li>
 <li><strong>Implied vol:</strong> the volatility that would make the formula produce <em>exactly your premium</em>. Compare it to your σ input: if implied vol is higher, your premium is pricing in <strong>more</strong> movement than you assumed.</li>
-<li><strong>Lock σ to this premium's implied vol:</strong> makes the model agree with your premium (so every chart and Greek is computed at the market's implied vol). This is how desks work: <strong>they quote volatility, not dollars.</strong> When a desk says "bid at 12.3", that is a volatility. On the reference option 12.3% vol is $7.61.</li>
+<li><strong>Model fair value / "Start from this":</strong> the box at the top shows what the model says the option <em>should</em> cost at <strong>your</strong> σ. Press it to copy that number into the premium field, then edit it (type, drag the slider, use the arrow keys or the % chips) and watch everything update.</li>
+<li><strong>Greeks, surfaces and scenarios use: Premium's σ / My σ.</strong> A premium different from the model price implies a different volatility. This switch chooses whether the Greeks tab, the 3-D Greek surface, the payoff "today" curve and the What-if tab are computed at that implied volatility (the default once you enter a premium) or at your own σ. The fair value always uses your σ. Your σ box is never overwritten. This is how desks work: <strong>they quote volatility, not dollars.</strong> When a desk says "bid at 12.3", that is a volatility. On the reference option 12.3% vol is $7.61.</li>
 </ul>
 <h3>The banner that appears when you enter a premium</h3>
 <table class="tbl">
@@ -277,7 +278,7 @@
 </ul>
 <p><strong>The six curves</strong> below the table show the same idea continuously: the horizontal axis is the premium, and every point re-solves the implied vol and recomputes the Greeks at it. The white dashed line is the model price at your σ; the orange line is your premium. You can watch delta, gamma, vega, theta and P(profit) slide as the premium moves from cheap to expensive. (For extremely high premiums the implied vol explodes because the premium approaches its upper bound, the stock price itself; the charts stop before that.)</p>
 <p><strong>A more ordinary example.</strong> Stock 100, strike 100, 1 year, 5%, your vol 20% (model 10.45). If the market is asking <strong>14</strong>, the implied vol is <strong>29.4%</strong>: delta 0.637 → 0.624, gamma 0.0188 → 0.0129, vega 0.375 → 0.379, theta −0.0176 → −0.0219 per day. The bigger the premium relative to the model, the more the whole risk profile shifts.</p>
-<p><strong>Lock σ to this premium's implied vol</strong> (left panel) re-runs <em>every</em> tab at the market's volatility instead of yours, so the Greeks charts, payoff "today" curve and What-if tab all reflect the market's view.</p>
+<p><strong>What changes when you edit the premium.</strong> With the switch on <em>Premium's σ</em> (the default), the <strong>Greeks</strong> tab overlays two sets of lines: dashed = your σ, solid = the σ your premium implies, so the gap is exactly what the premium changes. The <strong>3-D Greek surface</strong> has a <em>View</em> menu: at the premium's σ, at your σ, or their <strong>difference</strong> (red = the premium lowers that Greek, green = raises it). The <strong>payoff</strong> adds a dashed "today at my σ" curve, <strong>What-if</strong> values the scenarios at the premium's σ, and the <strong>Vol surface</strong> tab drops a marker where your premium's implied vol sits on the market surface (compare only if your inputs describe the same stock or index). Switch to <em>My σ</em> to put all of that back on your own view.</p>
 <h3>The five price cards</h3>
 <table class="tbl">
 <thead>
@@ -460,7 +461,7 @@
 <li><strong>Set the rate to 0</strong> with an American put: the two prices become identical. No interest to earn, so no reason to exercise early.</li>
 <li><strong>American call, dividend 0</strong>: American = European exactly. Now set the dividend yield to 8%: the American call is now worth more.</li>
 <li><strong>Type 12 as your premium</strong> (long call): the implied vol is about 24% vs your 20%. Edge is red. Drag the slider down and watch the edge turn green once the premium drops below 10.45.</li>
-<li><strong>Lock σ to the premium</strong>, then switch to the Greeks tab: every chart is now at the market's implied vol.</li>
+<li><strong>Type a premium, then open the Greeks tab</strong>: dashed lines = your σ, solid = the premium's σ. Open the 3-D Greek surface and change <em>View</em> to <strong>Difference</strong> to see where in (spot, time) the premium changes each Greek most.</li>
 <li><strong>What-if with the call</strong>: spot +10%, days passed 0: the profit is roughly delta × $10 plus a bit of gamma. Now move days passed to 90: watch theta pull it down in the waterfall.</li>
 <li><strong>Short a put</strong> (Short + Put): banner says max gain = premium, max loss = strike minus premium. In the What-if tab drag the spot to −20%: a huge loss compared with the small premium you collected. That is what "selling insurance" means.</li>
 <li><strong>Load a ticker (NDX, SPY, AAPL)</strong> and open <strong>Vol surface</strong>: find the skew (higher on the left) and the ATM line.</li>
@@ -583,7 +584,7 @@
 <tr>
 <td>16 · Takeaways</td>
 <td>Quote in vol; convexity is the product</td>
-<td>"Lock σ", What-if</td>
+<td>Premium's σ switch, What-if</td>
 </tr>
 <tr>
 <td>Homework</td>
