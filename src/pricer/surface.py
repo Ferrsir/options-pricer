@@ -85,6 +85,8 @@ def condition_chain(chain: pd.DataFrame, S: float, r: float, k_range=(-0.15, 0.1
     otm = ((df["type"] == "put") & (df["strike"] < df["fwd"])) | ((df["type"] == "call") & (df["strike"] >= df["fwd"]))
     spread_ok = ((df["ask"] - df["bid"]) / df["mid"]) < max_rel_spread
     df = df[otm & spread_ok & df["mid"].notna() & df["k"].between(*k_range)].copy()
+    # one quote per (expiry, strike): index products list duplicate roots, and PCHIP needs strictly increasing strikes
+    df = df.assign(_rel=(df["ask"] - df["bid"]) / df["mid"]).sort_values("_rel").drop_duplicates(["T", "strike"]).drop(columns="_rel")
     df["iv"] = implied_vol_vec(df["mid"], S, df["strike"], df["T"], r, df["q"], df["type"] == "call")
     df = df[np.isfinite(df["iv"]) & (df["iv"] > 0.02) & (df["iv"] < 3.0)]
     return df[["T", "strike", "k", "iv", "type", "mid"]].sort_values(["T", "k"]).reset_index(drop=True), qmap

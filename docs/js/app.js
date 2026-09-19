@@ -1,5 +1,5 @@
-import * as P from './pricing.js?v=6';
-import * as D from './data.js?v=6';
+import * as P from './pricing.js?v=7';
+import * as D from './data.js?v=7';
 
 const $ = (id) => document.getElementById(id);
 const state = { type: 'call', side: 'long', style: 'european', chain: null, chainExpiry: null, ticker: '', tab: 'overview', lsmc: null, basis: 'market', iv: NaN, surf: null };
@@ -51,18 +51,26 @@ function compute() {
   showError(err);
   if (err) { cache = null; return null; }
   const p = readInputs();
+  let failedSigma = p.sigma; // which sigma the tree choked on: the analysis sigma or yours
   try {
     const evalAt = (sigma, full) => {
+      failedSigma = sigma;
       const bsm = P.bsmPrice(p.S, p.K, p.T, p.r, sigma, p.q, p.kind);
       const eu = P.binomialTree(p.S, p.K, p.T, p.r, sigma, p.q, p.kind, p.steps, false);
       const am = P.binomialTree(p.S, p.K, p.T, p.r, sigma, p.q, p.kind, p.steps, true, full);
       if (!full) return { bsm, eu, am };
-      return { bsm, eu, am, g: P.bsmGreeks(p.S, p.K, p.T, p.r, sigma, p.q, p.kind), ag: P.americanGreeks(p.S, p.K, p.T, p.r, sigma, p.q, p.kind, Math.min(p.steps, 500)) };
+      // americanGreeks also bumps sigma by 0.005, so it can fail at a very low sigma where the plain price still works: show "—" then
+      let ag; try { ag = P.americanGreeks(p.S, p.K, p.T, p.r, sigma, p.q, p.kind, Math.min(p.steps, 500)); } catch { ag = { delta: NaN, gamma: NaN, vega: NaN, theta: NaN, rho: NaN }; }
+      return { bsm, eu, am, g: P.bsmGreeks(p.S, p.K, p.T, p.r, sigma, p.q, p.kind), ag };
     };
     const eff = evalAt(p.sigma, true);                              // at the analysis σ: Greeks, charts, scenarios
     const mod = p.sigma === raw.sigma ? eff : evalAt(raw.sigma, false); // at YOUR σ: the model fair value
     cache = { p, raw, ...eff, mod, intrinsic: P.intrinsic(p.S, p.K, p.kind) };
-  } catch (e) { showError(e.message); cache = null; }
+  } catch (e) {
+    // the tree needs d < e^((r-q)dt) < u: with a tiny sigma and many steps it does not hold. Say what to change instead of quoting the condition.
+    showError(/no-arbitrage/i.test(e.message) ? `Volatility ${pct(failedSigma, 2)} is too low for ${p.steps} tree steps (the up/down moves become smaller than the interest drift). Raise σ, or lower the steps slider.` : e.message);
+    cache = null;
+  }
   return cache;
 }
 
@@ -113,7 +121,7 @@ function renderOverview() {
     theta: ['Theta Θ', 'Change in premium per calendar day; the rent paid for gamma.', 1 / 365],
     rho: ['Rho ρ', 'Change in premium per 1% move in the risk-free rate.', 0.01],
   };
-  $('greeksNote').textContent = `${state.side} position, signs ${state.side === 'long' ? 'as you hold it' : 'flipped for the short side'} · Greeks at σ ${pct(p.sigma, 2)}${p.sigma !== raw.sigma ? ' (implied by your premium)' : ''}`;
+  $('greeksNote').textContent = `${state.side} position, signs ${state.side === 'long' ? 'as you hold it' : 'flipped for the short side'} · Greeks at σ ${pct(p.sigma, 2)}${p.sigma !== raw.sigma ? ' (implied by your premium)' : ''}${p.style === 'american' ? ' · the charts and surfaces below use Black-Scholes (European) values, so they differ slightly from the American-tree column here' : ''}`;
   $('greekTable').innerHTML = `<tr><th>Greek</th><th class="num">BSM</th><th class="num">American tree</th><th>Meaning</th></tr>` +
     Object.entries(desc).map(([k, [name, why, sc]]) => `<tr><td>${name}</td><td class="num">${fmt(s * c.g[k] * sc, 4)}</td><td class="num">${fmt(s * c.ag[k] * sc, 4)}</td><td class="why">${why}</td></tr>`).join('');
 }
@@ -211,7 +219,7 @@ function renderPayoff() {
     annotations: [{ x: p.S, yref: 'paper', y: 1, text: 'spot', showarrow: false, font: { color: '#e5484d' } }, { x: be, yref: 'paper', y: 0.94, text: `breakeven ${be.toFixed(2)}`, showarrow: false, font: { color: '#3fae78' }, xanchor: 'left' }] }));
   const maxLoss = s === 1 ? `${fmt(paid, 2)} (the premium)` : (p.kind === 'call' ? 'unbounded' : `${fmt(p.K - paid, 2)}`);
   const maxGain = s === 1 ? (p.kind === 'call' ? 'unbounded' : `${fmt(p.K - paid, 2)}`) : `${fmt(paid, 2)} (the premium)`;
-  $('payoffNote').textContent = `Max loss: ${maxLoss} · Max gain: ${maxGain}. Curves use Black-Scholes value for "today" at σ ${pct(p.sigma, 1)}; premium ${Number.isFinite(mkt) ? 'is your market price' : 'is the model price'}.`;
+  $('payoffNote').textContent = `Max loss: ${maxLoss} · Max gain: ${maxGain}. Curves use Black-Scholes value for "today" at σ ${pct(p.sigma, 1)}${p.style === 'american' ? ' (European: an American option is worth a little more, so its real curve sits slightly higher)' : ''}; premium ${Number.isFinite(mkt) ? 'is your market price' : 'is the model price'}.`;
 }
 
 function renderTree() {
@@ -276,7 +284,7 @@ let guideLoaded = false;
 async function loadGuide() {
   if (guideLoaded) return;
   try {
-    const r = await fetch('./guide.html?v=6'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const r = await fetch('./guide.html?v=7'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
     $('guideText').innerHTML = await r.text(); guideLoaded = true;
   } catch (e) { $('guideText').innerHTML = `<p class="hint bad">Could not load the guide (${e.message}). It is also in the repository as GUIDE.md.</p>`; }
 }
@@ -288,7 +296,7 @@ async function loadSurface() {
   try {
     const s = await D.getSurface(t);
     state.surf = s; drawSurface(s);
-    $('surfStatus').textContent = `${s.label} · spot ${s.spot.toLocaleString()} · ${s.asof} · ${s.source === 'live' ? 'live data' : 'bundled snapshot'}`;
+    $('surfStatus').textContent = `${s.label} · spot ${s.spot.toLocaleString()} · ${s.asof} · ${({ live: 'live data', cboe: 'live data (Cboe, 15-min delayed)', snapshot: 'bundled snapshot' }[s.source] || 'live data')}`;
   } catch (e) { $('surfStatus').className = 'hint bad'; $('surfStatus').textContent = e.message; }
   $('loadSurface').disabled = false;
 }
@@ -333,16 +341,17 @@ async function loadTicker() {
   try {
     const q = await D.getQuote(t);
     state.ticker = t; state.chain = null;
+    $('premium').value = ''; // a premium typed for the previous ticker means nothing here
     $('S').value = +q.spot.toFixed(4);
     $('r').value = +(q.rate * 100).toFixed(3);
     $('q').value = +(q.div_yield * 100).toFixed(3);
-    const v1 = q.hist_vol_1y ?? q.hist_vol;
+    const v1 = q.iv30 ?? q.hist_vol_1y ?? q.hist_vol; // 30-day implied vol when the data source has it (it is what the options market is pricing today)
     $('sigma').value = +(v1 * 100).toFixed(2);
     if (!Number.isFinite(parseFloat($('K').value)) || document.activeElement !== $('K')) $('K').value = Math.round(q.spot);
     st.className = 'hint good';
-    st.textContent = `${q.name || q.ticker} · spot ${q.spot.toLocaleString()} · r ${(q.rate * 100).toFixed(2)}% · q ${(q.div_yield * 100).toFixed(2)}% · as of ${q.asof} (${q.source === 'live' ? 'live' : 'snapshot'})`;
+    st.textContent = `${q.name || q.ticker} · spot ${q.spot.toLocaleString()} · r ${(q.rate * 100).toFixed(2)}% · q ${(q.div_yield * 100).toFixed(2)}% · as of ${q.asof} (${{ live: 'live', cboe: 'live, 15-min delayed (Cboe)', snapshot: 'snapshot' }[q.source] || 'live'})${q.source === 'cboe' ? ' · dividend yield estimated from put-call parity' : ''}`;
     const chips = $('volChips'); chips.hidden = false; chips.innerHTML = '';
-    [['30d hist vol', q.hist_vol], ['1y hist vol', q.hist_vol_1y]].forEach(([l, v]) => { if (!Number.isFinite(v)) return; const b = document.createElement('button'); b.className = 'chip'; b.textContent = `σ = ${l} ${(v * 100).toFixed(1)}%`; b.onclick = () => { $('sigma').value = +(v * 100).toFixed(2); update(); }; chips.appendChild(b); });
+    [['30-day implied vol', q.iv30], ['30d hist vol', q.hist_vol], ['1y hist vol', q.hist_vol_1y]].forEach(([l, v]) => { if (!Number.isFinite(v)) return; const b = document.createElement('button'); b.className = 'chip'; b.textContent = `σ = ${l} ${(v * 100).toFixed(1)}%`; b.onclick = () => { $('sigma').value = +(v * 100).toFixed(2); update(); }; chips.appendChild(b); });
     const sel = $('expirySel'); $('chainPick').hidden = !(q.expiries && q.expiries.length);
     sel.innerHTML = '<option value="">Choose expiry…</option>' + (q.expiries || []).map((e) => `<option value="${e}">${e} (${Math.max(0, Math.round((new Date(e) - Date.now()) / 864e5))}d)</option>`).join('');
     $('strikeSel').innerHTML = '';
@@ -413,9 +422,9 @@ function renderFair() {
   $('fairVal').textContent = fmt(m, 4);
   $('fairSig').textContent = pct(c.raw.sigma, 1);
   $('premium').placeholder = `Model says ${fmt(m, 4)}. Type yours…`;
-  const atFair = Number.isFinite(prem) && Math.abs(prem - m) < 5e-5;
-  $('fairUse').textContent = atFair ? 'At fair value' : 'Start from this';
-  $('fairUse').disabled = atFair;
+  const atFair = Number.isFinite(prem) && Math.abs(prem - m) < 5e-5, worthless = m < 5e-5; // a premium of 0 has no implied vol, so there is nothing to start from
+  $('fairUse').textContent = atFair ? 'At fair value' : worthless ? 'Model ≈ 0' : 'Start from this';
+  $('fairUse').disabled = atFair || worthless;
 }
 function renderIvBox() {
   const box = $('ivReadout'), prem = getPremium(), raw = readRaw(), iv = state.iv;
@@ -423,7 +432,8 @@ function renderIvBox() {
   box.hidden = false;
   if (!(prem > 0)) { box.textContent = 'Enter a premium above 0.'; return; }
   if (!Number.isFinite(iv)) { box.textContent = 'No volatility reproduces this premium: it is outside the no-arbitrage bounds (below intrinsic/forward value or above the underlying).'; return; }
-  box.innerHTML = `Implied vol (${raw.style}): <b>${(iv * 100).toFixed(2)}%</b> <button class="chip" id="useIv">use as my σ</button><br><span class="hint">vs your σ ${(raw.sigma * 100).toFixed(1)}% → ${iv > raw.sigma ? 'this premium prices in MORE vol than your input' : 'this premium prices in LESS vol than your input'}</span>`;
+  const same = Math.abs(iv - raw.sigma) < 5e-4; // within 0.05 vol points: the same number at the precision shown, so do not claim "more" or "less"
+  box.innerHTML = `Implied vol (${raw.style}): <b>${(iv * 100).toFixed(2)}%</b> <button class="chip" id="useIv">use as my σ</button><br><span class="hint">vs your σ ${(raw.sigma * 100).toFixed(1)}% → ${same ? 'this premium matches the vol you entered' : iv > raw.sigma ? 'this premium prices in MORE vol than your input' : 'this premium prices in LESS vol than your input'}</span>`;
   $('useIv').onclick = () => { $('sigma').value = +(iv * 100).toFixed(3); update(); };
 }
 function syncSlider() {
@@ -455,7 +465,7 @@ function renderBanner() {
   const iv = state.iv;
   const cells = [
     ['lead', 'Your premium', fmt(prem, 4), `$${(prem * 100).toLocaleString('en-US', { maximumFractionDigits: 0 })} per contract · you ${s === 1 ? 'pay' : 'collect'}`, ''],
-    ['', 'Edge vs model', Math.abs(edge) < 5e-5 ? '0.0000' : `${edge >= 0 ? '+' : '−'}${fmt(Math.abs(edge), 4)}`, `${Number.isFinite(edgePct) ? (edgePct >= 0 ? '+' : '−') + Math.abs(edgePct * 100).toFixed(1) + '% · ' : ''}${verdict[0]} (σ ${pct(raw.sigma, 1)})`, verdict[1]],
+    ['', 'Edge vs model', Math.abs(edge) < 5e-5 ? '0.0000' : `${edge >= 0 ? '+' : '−'}${fmt(Math.abs(edge), 4)}`, `${Number.isFinite(edgePct) ? (Math.abs(edgePct * 100) < 0.05 ? '0.0' : (edgePct >= 0 ? '+' : '−') + Math.abs(edgePct * 100).toFixed(1)) + '% · ' : ''}${verdict[0]} (σ ${pct(raw.sigma, 1)})`, verdict[1]],
     ['', 'Implied vol', Number.isFinite(iv) ? pct(iv, 2) : '—', Number.isFinite(iv) ? `vs your σ ${pct(raw.sigma, 1)}` : 'no vol fits this premium', ''],
     ['', 'Breakeven (your premium)', fmt(be, 2), `${pct((be - p.S) / p.S, 1)} from spot at expiry`, ''],
     ['', 'P(profit)', pct(pr, 1), `at expiry, risk-neutral, σ ${pct(p.sigma, 1)}`, ''],
@@ -561,7 +571,7 @@ function valueAt(p, S, T, sigma) {
 function wfRange(steps, total) { // running totals of the waterfall, padded 22% each side (and always including 0)
   let run = 0; const lv = [0, total];
   steps.forEach((v) => { run += v; lv.push(run); });
-  const lo = Math.min(...lv), hi = Math.max(...lv), pad = Math.max(hi - lo, 1e-6) * 0.22;
+  const lo = Math.min(...lv), hi = Math.max(...lv), pad = Math.max(hi - lo, 0.02) * 0.22; // never a zero-width axis (it printed nano-scale ticks like ±200n)
   return [lo - pad, hi + pad];
 }
 function renderWhatIf() {
@@ -586,7 +596,7 @@ function renderWhatIf() {
   ].map(([k, v, sub, tone]) => `<div class="stat"><div class="k">${k}</div><div class="v ${tone}">${v}</div><div class="s">${sub}</div></div>`).join('');
 
   // attribution of the move: entry edge, then Greeks
-  const g = p.style === 'american' ? c.ag : c.g, dS = S1 - p.S, dT = dd / 365;
+  const g = p.style === 'american' && Number.isFinite(c.ag.delta) ? c.ag : c.g, dS = S1 - p.S, dT = dd / 365;
   const parts = [
     ['Edge at entry', s * (now - paid)],
     ['Delta', s * g.delta * dS],
@@ -792,7 +802,7 @@ function init() {
     const v = b.dataset.p, model = modelPrice();
     if (v === 'clear') $('premium').value = '';
     else if (v === 'model') { if (Number.isFinite(model)) $('premium').value = +model.toFixed(4); }
-    else { const base = Number.isFinite(getPremium()) ? getPremium() : model; if (Number.isFinite(base)) $('premium').value = +Math.max(base * (1 + parseFloat(v)), 0).toFixed(4); }
+    else if (Number.isFinite(model)) $('premium').value = +Math.max(model * (1 + parseFloat(v)), 0).toFixed(4); // always relative to the MODEL price, so +10% then -10% is not a random walk
     update();
   }));
   ['wiSpot', 'wiVol', 'wiDays'].forEach((id) => $(id).addEventListener('input', renderWhatIf));
@@ -853,10 +863,10 @@ function init() {
 async function refreshPill() {
   const pill = $('dataPill');
   const base = await D.detectApi();
-  if (base !== null) { $('dataPillText').textContent = 'Live Yahoo Finance'; pill.className = 'pill live'; pill.setAttribute('aria-label', 'Market data: live Yahoo Finance'); }
+  if (base !== null) { $('dataPillText').textContent = 'Live market data'; pill.className = 'pill live'; pill.setAttribute('aria-label', 'Market data: live, any ticker'); }
   else { $('dataPillText').textContent = 'Bundled snapshots'; pill.className = 'pill snap'; pill.setAttribute('aria-label', 'Market data: bundled Yahoo Finance snapshots'); }
   const snaps = await D.snapshotTickers();
-  $('ticker').placeholder = base !== null ? 'Any ticker — AAPL, SPY, NDX…' : `Ticker — ${snaps.filter((s) => s !== 'DEMO').slice(0, 5).join(', ')}…`;
+  $('ticker').placeholder = base !== null ? 'Any ticker: AAPL, PLTR, BRK.B, SPX…' : `Ticker — ${snaps.filter((s) => s !== 'DEMO').slice(0, 5).join(', ')}…`;
 }
 
 init();

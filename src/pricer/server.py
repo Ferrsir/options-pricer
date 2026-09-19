@@ -9,6 +9,9 @@ same web UI full live data. Endpoints:
     /api/quote?ticker=AAPL              spot, rate, dividend yield, historical vols, expiries
     /api/chain?ticker=AAPL&expiry=...   calls + puts for one expiry
     /api/surface?ticker=NDX             conditioned implied-vol surface grid (or ticker=demo)
+    /api/chains?ticker=TSLA             compact multi-expiry chains (same JSON as the serverless API)
+
+Any optionable US ticker works: Yahoo Finance is tried first, Cboe's public delayed chains are the fallback.
 """
 from __future__ import annotations
 
@@ -89,8 +92,12 @@ class Handler(BaseHTTPRequestHandler):
                     data = api_chain(qs["ticker"], qs["expiry"])
                 elif url.path == "/api/surface":
                     data = api_surface(qs.get("ticker", "demo"))
+                elif url.path == "/api/chains":
+                    from . import cboe
+
+                    data = cboe.chains(qs["ticker"], float(qs.get("min_days", 14)), float(qs.get("max_days", 160)), int(qs.get("max_expiries", 14)))
                 elif url.path == "/api/ping":
-                    data = {"ok": True}
+                    data = {"ok": True, "surface": True, "chains": True, "source": "yahoo+cboe"}
                 else:
                     return self._send(404, b'{"error":"unknown endpoint"}')
                 return self._send(200, json.dumps(_clean(data)).encode())

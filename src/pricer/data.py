@@ -36,6 +36,8 @@ class Quote:
     hist_vol_1y: float
     asof: str
     name: str = ""
+    iv30: float = float("nan")  # 30-day implied vol (only from the Cboe fallback)
+    source: str = "yahoo"
 
 
 def risk_free_rate() -> float:
@@ -65,7 +67,24 @@ def trailing_dividend_yield(tk, spot: float) -> float:
         return 0.0
 
 
+def _quote_from_cboe(ticker: str) -> Quote:
+    from . import cboe
+
+    q = cboe.quote(ticker)
+    nan = float("nan")
+    return Quote(ticker=q["ticker"], spot=q["spot"], rate=q["rate"], div_yield=q["div_yield"], hist_vol=nan, hist_vol_1y=nan,
+                 asof=q["asof"], name=q["name"], iv30=q["iv30"] if q["iv30"] else nan, source="cboe")
+
+
 def get_quote(ticker: str) -> Quote:
+    """Yahoo Finance first (has price history, so historical vol); Cboe's public chains when Yahoo fails or has no data."""
+    try:
+        return _get_quote_yahoo(ticker)
+    except Exception:
+        return _quote_from_cboe(ticker)
+
+
+def _get_quote_yahoo(ticker: str) -> Quote:
     yf = _yf()
     sym = normalize_ticker(ticker)
     tk = yf.Ticker(sym)
@@ -91,7 +110,15 @@ def get_quote(ticker: str) -> Quote:
 
 
 def expiries(ticker: str) -> list[str]:
-    return list(_yf().Ticker(normalize_ticker(ticker)).options)
+    try:
+        e = list(_yf().Ticker(normalize_ticker(ticker)).options)
+        if e:
+            return e
+    except Exception:
+        pass
+    from . import cboe
+
+    return cboe.quote(ticker)["expiries"]
 
 
 def year_fraction(expiry: str, now: pd.Timestamp | None = None) -> float:
@@ -101,8 +128,27 @@ def year_fraction(expiry: str, now: pd.Timestamp | None = None) -> float:
     return max((exp - now).total_seconds() / (365.0 * 86400.0), 0.0)
 
 
+def _chain_from_cboe(ticker: str, expiry: str) -> pd.DataFrame:
+    from . import cboe
+
+    rows = cboe.chain(ticker, expiry)["rows"]
+    df = pd.DataFrame(rows).assign(expiry=expiry)
+    df["mid"] = np.where((df["bid"] > 0) & (df["ask"] > 0), 0.5 * (df["bid"] + df["ask"]), np.nan)
+    return df[["expiry", "type", "strike", "bid", "ask", "mid", "lastPrice", "volume", "openInterest", "impliedVolatility"]]
+
+
 def get_chain(ticker: str, expiry: str) -> pd.DataFrame:
-    """Calls and puts for one expiry in a single tidy DataFrame."""
+    """Calls and puts for one expiry in a single tidy DataFrame (Yahoo, else Cboe)."""
+    try:
+        df = _get_chain_yahoo(ticker, expiry)
+        if len(df):
+            return df
+    except Exception:
+        pass
+    return _chain_from_cboe(ticker, expiry)
+
+
+def _get_chain_yahoo(ticker: str, expiry: str) -> pd.DataFrame:
     ch = _yf().Ticker(normalize_ticker(ticker)).option_chain(expiry)
     calls, puts = ch.calls.copy(), ch.puts.copy()
     calls["type"], puts["type"] = "call", "put"
@@ -113,7 +159,24 @@ def get_chain(ticker: str, expiry: str) -> pd.DataFrame:
     return df[[c for c in keep if c in df.columns]]
 
 
+def _full_chain_from_cboe(ticker: str, min_days: float, max_days: float, max_expiries: int) -> pd.DataFrame:
+    from . import cboe
+
+    payload = cboe.chains(ticker, min_days, max_days, max_expiries)
+    rows = [dict(expiry=e["expiry"], T=e["T"], type="call" if t == "c" else "put", strike=k, bid=b, ask=a, mid=0.5 * (b + a))
+            for e in payload["expiries"] for t, k, b, a in e["rows"]]
+    return pd.DataFrame(rows)
+
+
 def get_full_chain(ticker: str, min_days: float = 7, max_days: float = 200, max_expiries: int = 14) -> pd.DataFrame:
+    """Yahoo chains, falling back to Cboe's public chains when Yahoo has none or fails."""
+    try:
+        return _get_full_chain_yahoo(ticker, min_days, max_days, max_expiries)
+    except Exception:
+        return _full_chain_from_cboe(ticker, min_days, max_days, max_expiries)
+
+
+def _get_full_chain_yahoo(ticker: str, min_days: float = 7, max_days: float = 200, max_expiries: int = 14) -> pd.DataFrame:
     """Chains for many expiries, tagged with T (years).
 
     Index products list dozens of near-dated weeklies, so instead of taking the first N expiries we

@@ -90,7 +90,7 @@
 </tr>
 <tr>
 <td><strong>Historical vol</strong></td>
-<td>How much the stock <em>actually</em> moved in the past (the ticker box fills this in from Yahoo).</td>
+<td>How much the stock <em>actually</em> moved in the past (the ticker box fills this in when the data source has price history; otherwise it uses the 30-day implied vol).</td>
 <td></td>
 </tr>
 <tr>
@@ -602,6 +602,7 @@
 <li><strong>"Why is theta negative?"</strong> Every day that passes gives the option less time to move in your favour, so less time value. It is not a fee anyone charges; it is the price of holding curvature.</li>
 <li><strong>"Why does implied vol differ from what the ticker box says (historical vol)?"</strong> Historical vol is the past. Implied vol is the market's <em>price</em> for the future, including fear and demand for insurance. The gap between them is a big part of what options traders trade.</li>
 <li><strong>"The tree and the formula don't match exactly."</strong> They don't have to. The tree converges as steps increase and the small zigzag is a known feature of the method.</li>
-<li><strong>"The website says 'bundled snapshot' instead of live."</strong> Yahoo does not allow browser pages to call it directly. Run <code>python -m pricer serve</code> locally for any ticker, live.</li>
+<li><strong>"The website says 'bundled snapshot' instead of live."</strong> Yahoo does not allow browser pages to call it directly, so a web page needs a small server in the middle. The site looks for one in this order: your own (<code>python -m pricer serve</code>, Yahoo first with Cboe as backup), then the public data API connected to the hosted site, then the 11 bundled snapshots. Run <code>python -m pricer serve</code> locally for any ticker, live.</li>
+<li><strong>"What does 'live, 15-min delayed (Cboe)' mean, and can I trust it?"</strong> Cboe publishes free, delayed option chains for every optionable US stock, ETF and index. Any ticker that has listed options works. What is <em>missing</em> from that feed, and how the site fills it: no company name (the ticker is shown instead); no historical volatility (the σ box starts from the 30-day <strong>implied</strong> vol, which is what the market is pricing today); no dividend yield (the site <strong>estimates</strong> it from put-call parity, and for low-dividend stocks it often comes out as 0%, so check it against the company's actual yield if you need precision). The vol surface for these tickers is built inside your browser from the raw bid/ask quotes, using the same steps as the Python version.</li>
 <li><strong>"Is it advice?"</strong> No. It is an educational pricing tool, not a recommendation to buy or sell anything.</li>
 </ul>

@@ -12,7 +12,7 @@ An **options premium pricer** for Traders@SMU HW 1: Black-Scholes-Merton, an Ame
 
 ```bash
 pip install -e ".[dev]"            # install (numpy, scipy, matplotlib, pandas, yfinance, pytest, markdown)
-python -m pytest -q                # 22 tests, must stay green
+python -m pytest -q                # 31 tests, must stay green
 python -m pricer checks            # the slide's sanity checks
 python -m pricer serve             # site + live Yahoo API at http://localhost:8000
 python -m pricer surface NDX --out output/ndx_surface.png
@@ -30,7 +30,10 @@ Pushing to `main` deploys the site (GitHub Pages, source = `main` / `docs`). A b
 | `src/pricer/binomial.py` | CRR tree, American exercise, tree Greeks, exercise boundary, American implied vol |
 | `src/pricer/lsmc.py` | Longstaff-Schwartz Monte Carlo |
 | `src/pricer/surface.py` | IV surface: log-moneyness, Savitzky-Golay, two-stage PCHIP |
-| `src/pricer/data.py`, `server.py` | Yahoo Finance access; local API used by the site |
+| `src/pricer/data.py`, `server.py` | Yahoo Finance access (Cboe fallback); local API used by the site |
+| `src/pricer/cboe.py` (+ copy in `serverless/lib/`) | **Any-ticker data**: Cboe public delayed chains, stdlib only; also the serverless API handlers |
+| `serverless/` | Deployable API for the hosted site (`api/*.py`); refresh its copy with `python scripts/build_serverless.py` |
+| `docs/js/surface.js` | JS port of `surface.py` (smoothing + PCHIP); parity-tested against Python |
 | `src/pricer/viz.py`, `cli.py`, `checks.py` | Plots, CLI, slide sanity checks |
 | `docs/js/pricing.js` | **JavaScript re-implementation of the Python engine** (same numbers) |
 | `docs/js/app.js`, `data.js`, `index.html`, `style.css` | The site UI and data layer |
@@ -40,7 +43,7 @@ Pushing to `main` deploys the site (GitHub Pages, source = `main` / `docs`). A b
 ## Rules that are easy to break
 
 1. **Two engines must agree.** `docs/js/pricing.js` mirrors `src/pricer/{bsm,binomial,lsmc}.py`. Change one, change the other, then compare numbers (reference case: S=K=100, T=1, r=5%, σ=20%, q=0 → call 10.450583572, put 5.573526022, American put with 1000 steps 6.089595283). There is no Node here; check JS in a browser console via `window.__pricer.P` on a page served by `python -m pricer serve`.
-2. **Bump the cache-bust version** (`?v=N`) in `docs/index.html`, `docs/js/app.js` (imports and the `guide.html` fetch) and `docs/js/data.js` whenever you change anything under `docs/`. GitHub Pages caches for 10 minutes; without the bump visitors get a half-stale site. Current value: `v=6`.
+2. **Bump the cache-bust version** (`?v=N`) in `docs/index.html`, `docs/js/app.js` (imports and the `guide.html` fetch) and `docs/js/data.js` whenever you change anything under `docs/`. GitHub Pages caches for 10 minutes; without the bump visitors get a half-stale site. Current value: `v=7`.
 3. **`GUIDE.md` is the source of `docs/guide.html`.** Edit `GUIDE.md`, then run `python scripts/build_guide.py` and commit both. Do not hand-edit `docs/guide.html`.
 4. **`docs/data/snapshots.json` is generated** from real market data by `scripts/snapshot.py`. Never hand-edit or fabricate values. Quote figures in `GUIDE.md` that come from the reference case should be recomputed, not guessed.
 5. **Tree validity.** The CRR tree needs `d < e^{(r-q)dt} < u`, i.e. `σ > |r-q|·√dt`. Any code that searches over σ (implied vol) must start above that bound or catch the error. See `american_implied_vol` (Python) and `americanImpliedVol` (JS).
@@ -49,7 +52,8 @@ Pushing to `main` deploys the site (GitHub Pages, source = `main` / `docs`). A b
 8. **UI design system (glass).** Tokens live at the top of `docs/style.css` (`--glass`, `--ink*`, `--accent`, radii). New surfaces reuse `.glass`; do not invent new colours or blur values. Text must stay at 4.5:1 or better on glass, `prefers-reduced-motion` and `prefers-reduced-transparency` must keep working, and every interactive element needs a visible focus ring. Any new translucent surface must be added to the two `:is(.glass, .stat, ...)` fallback rules in `style.css`: by default the site follows the OS "reduce transparency" setting (this owner's Windows has Transparency effects OFF), and the header toggle (`html[data-glass="on|off"]`, remembered in localStorage) overrides it. Icons are the inline SVG sprite at the top of `index.html` (no emoji). Numbers use the mono font. Plotly charts take colours from the `GRID`/`ZERO`/`TXT`/`COLORS` constants and `baseLayout()` in `app.js`; **3-D (WebGL) scenes ignore alpha, so use solid hex colours there**. Every element ID in `index.html` is referenced from `app.js`; rename one and you must rename both. Inputs that carry an info tooltip use `<label for=...>` beside the `.tip` button (a button *inside* a label steals the label's association).
 9. **Explainability over cleverness.** No new dependency or framework without a reason the owner can defend in class.
 10. **Two volatilities, never merged.** `readRaw()` = the inputs as typed; `readInputs()` adds `p.sigmaModel` (the σ box, "my view") and sets `p.sigma` to the σ implied by the premium when `state.basis === 'market'` (the default once a premium is valid). `cache.mod` holds prices at your σ (hero, Overview prices, banner edge, LSMC); `cache.*` (g, ag, bsm, eu, am) is the analysis basis used by Greeks, payoff, What-if, Tree and both surfaces. The implied vol is **never written back into the σ input** (the old lock checkbox did, which destroyed the comparison).
-11. **Do not overstate.** Numbers in docs and UI text must come from running the code. Say what was and was not verified.
+11. **Surface has two implementations too.** `docs/js/surface.js` mirrors `src/pricer/surface.py` (same steps, same constants, dedupe of duplicate strikes). Change one, change the other, and re-run the parity check (write payloads with `cboe.chains`, build both, compare grids; max diff was ~1e-13 on TSLA/AAPL/PLTR and 6e-11 on SPX). `src/pricer/cboe.py` and `serverless/lib/cboe.py` must stay identical (a test enforces it).
+12. **Do not overstate.** Numbers in docs and UI text must come from running the code. Say what was and was not verified.
 
 ## Definition of done
 
@@ -61,8 +65,10 @@ Pushing to `main` deploys the site (GitHub Pages, source = `main` / `docs`). A b
 
 ## Known limitations and open items
 
-- Hosted site cannot fetch live tickers or option chains. Only 11 snapshot tickers plus `DEMO`. Fix option (not done): a small serverless `/api` (e.g. Vercel) mirroring `server.py`'s `/api/quote`, `/api/chain`, `/api/surface`.
-- The *Premium impact* sweep curves use Black-Scholes even when American is selected; the comparison table uses the tree.
+- Any-ticker on the hosted site needs the serverless API from `serverless/` to be deployed and `DEFAULT_API` in `docs/js/data.js` set; until then the hosted site is limited to the 11 bundled snapshot tickers. Cboe data is delayed, unofficial and has no historical volatility, dividend yield (estimated from put-call parity) or company name; the risk-free rate is the 13-week T-bill from Yahoo when reachable, else 4%.
+- The *Premium impact* sweep curves use Black-Scholes even when American is selected; the comparison table uses the tree. The same holds for the Greeks-tab charts/surfaces and the payoff "today" curves (the UI now says so); only the tables, the Overview and What-if attribution use the American tree.
+- Vercel: `deploy_to_vercel` returned "Tool not found" on 2026-09-18 and `create_git_project` needs a team ID (the owner's account has none), so the API was not deployed from the agent side. Import the repo in the Vercel dashboard with Root Directory `serverless`, then set `DEFAULT_API`.
+- Known, left as is: "use as my σ" has no undo; a premium typed for one ticker is cleared on the next ticker Load; tree Greeks show "—" when σ is so low the bumped tree is invalid.
 - Vol surface: equity options are American but we invert the European formula on OTM quotes; butterfly arbitrage is only approximately removed (a desk would fit SVI). Documented in `METHODOLOGY.md` §7.
 - Screenshots for visual checks: the in-app preview pane is tiny; use headless Edge instead: `msedge --headless=new --enable-unsafe-swiftshader --window-size=1440,1900 --virtual-time-budget=14000 --screenshot=out.png URL` (the first invocation of a session sometimes writes a 0-byte file; run it once more).
 - No CI workflow (the GitHub token used so far lacked `workflow` scope).
@@ -88,6 +94,12 @@ Verified: ... (say how; say what was NOT verified)
 Needs from you: ...
 Open questions: ...
 ```
+
+### 2026-09-18 · Claude → Codex (any ticker + QA pass)
+Done: (1) Any-ticker data: `src/pricer/cboe.py` (stdlib only; Cboe delayed chains; quote/chain/chains/dispatch/BaseHandler), Yahoo-first with Cboe fallback in `data.py`, `/api/chains` in the local server, `docs/js/surface.js` (JS port of the surface pipeline so a static page builds the vol surface from raw quotes), `serverless/` (Vercel functions; `lib/cboe.py` is a build copy via `scripts/build_serverless.py`), `scripts/dev_serverless.py` (site + those handlers on one port, simulates the hosted path). iv30 becomes the default σ. (2) Two QA agents (browser workflow; numeric JS-vs-Python) found real issues, fixed here: fake "LESS/MORE vol" wording at equal vol, "-0.0%" and nano-scale waterfall ticks, ±% chips now always relative to the MODEL price (were compounding), a premium is cleared when a new ticker loads, "Start from this" disabled when the model price is ~0, friendly message (naming the right σ) when the tree is invalid, tree Greeks no longer crash the page at tiny σ, and the UI now says Greeks/payoff charts are Black-Scholes when American is selected. Cache-bust `v=7`. 31 tests.
+Verified: `pytest` 31 pass. JS surface vs Python surface: max grid diff ~1e-13 (TSLA/AAPL/PLTR), 6e-11 (SPX). Numeric QA agent: closed forms match Python to ~1e-13, trees ~1e-9, LSMC within its noise, 2,700 out-of-bounds implied-vol probes returned NaN, no invariant violated. Browser QA agent: premium workflow works as intended (10/10 checklist items). By hand in a browser on the dev server: PLTR (not in the snapshots) quote, contract pick, fair value 15.38 vs market 18.63 (IV 57.8%), chips, surface built in JS (50x60 grid, IV 45.6-58.4%, no NaN) with the premium marker. NOT verified: the hosted (GitHub Pages) any-ticker path, because the API is not deployed (see Known limitations); Safari/Firefox/mobile; screen readers.
+Needs from you: deploy `serverless/` (Vercel dashboard: import this repo, Root Directory `serverless`, Framework Other), then set `DEFAULT_API` in `docs/js/data.js` to that URL (bump `?v=`) and load a non-snapshot ticker on the live page.
+Open questions: Cboe's feed is unofficial and can change or block; is that acceptable for the hosted site, or should a keyed provider replace it?
 
 ### 2026-09-18 · Claude → Codex (premium drives Greeks and surfaces)
 Done: The owner asked why editing their own premium did not change the Greeks and surfaces. Now the site holds two volatilities: your σ (the input, sets the model fair value) and the σ implied by the premium. A visible switch (Premium's σ / My σ, default Premium's once a premium is valid) chooses the analysis basis; the old "Lock σ" checkbox (which overwrote the σ input and destroyed the comparison) is gone. Added: Model fair value + "Start from this" above the premium box; Greeks tab overlays My σ (dashed) vs Premium's σ (solid) and marks the premium on the price chart; Greek surface View menu (premium σ / my σ / difference); payoff adds "today at my σ"; What-if starts at the analysis σ; vol-surface tab marks where the premium's implied vol sits; charts now always include today's spot in range; premium equal to fair value snaps to your σ. See rule 10 for the data model. Cache-bust `v=6`.

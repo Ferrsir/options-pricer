@@ -5,8 +5,13 @@
 //   2. Bundled snapshots in ./data/snapshots.json (real Yahoo data captured when the site was built)
 //   3. Manual entry
 
+import { buildSurface } from './surface.js?v=7';
+
 const LS_KEY = 'pricer.apiBase';
+// Public any-ticker API (serverless/, deployed once). Empty until deployed; the page then falls back to the bundled snapshots.
+export const DEFAULT_API = '';
 let snapshots = null;
+let caps = {};
 
 export const getApiBase = () => { try { return localStorage.getItem(LS_KEY) || ''; } catch { return ''; } };
 export const setApiBase = (v) => { try { v ? localStorage.setItem(LS_KEY, v) : localStorage.removeItem(LS_KEY); } catch { /* private mode */ } };
@@ -27,6 +32,7 @@ function candidateBases() {
   if (custom) list.push(custom);
   if (location.protocol.startsWith('http') && !location.hostname.endsWith('github.io')) list.push(''); // same origin
   list.push('http://localhost:8000');
+  if (DEFAULT_API) list.push(DEFAULT_API);
   return [...new Set(list)];
 }
 
@@ -34,15 +40,16 @@ let liveBase; // undefined = not probed, null = none available
 export async function detectApi() {
   if (liveBase !== undefined) return liveBase;
   for (const b of candidateBases()) {
-    try { await getJson(`${b}/api/ping`, 2500); liveBase = b; return b; } catch { /* try next */ }
+    try { caps = await getJson(`${b}/api/ping`, 2500); liveBase = b; return b; } catch { /* try next */ }
   }
   liveBase = null; return null;
 }
-export const resetApiProbe = () => { liveBase = undefined; };
+export const resetApiProbe = () => { liveBase = undefined; caps = {}; };
+export const apiCaps = () => caps;
 
 export async function loadSnapshots() {
   if (snapshots) return snapshots;
-  try { snapshots = await getJson('./data/snapshots.json?v=6'); } catch { snapshots = {}; }
+  try { snapshots = await getJson('./data/snapshots.json?v=7'); } catch { snapshots = {}; }
   return snapshots;
 }
 
@@ -51,15 +58,15 @@ const norm = (t) => t.trim().toUpperCase().replace(/^\^/, '');
 export async function getQuote(ticker) {
   const sym = norm(ticker);
   const base = await detectApi();
+  const snap = async () => { const s = (await loadSnapshots())[sym]; return s ? { ...s.quote, expiries: [], source: 'snapshot' } : null; };
   if (base !== null) {
-    const q = await getJson(`${base}/api/quote?ticker=${encodeURIComponent(sym)}`);
-    return { ...q, source: 'live' };
+    try { const j = await getJson(`${base}/api/quote?ticker=${encodeURIComponent(sym)}`, 30000); return { ...j, source: j.source === 'cboe' ? 'cboe' : 'live' }; }
+    catch (e) { const s = await snap(); if (s) return s; throw e; }   // the API's own message ("no listed options…") is the useful one
   }
-  const snaps = await loadSnapshots();
-  const s = snaps[sym];
-  if (s) return { ...s.quote, expiries: [], source: 'snapshot' };
-  const known = Object.keys(snaps).join(', ');
-  throw new Error(`No live data API reachable and "${sym}" is not in the bundled snapshots (${known || 'none'}). Run "python -m pricer serve" locally for any ticker.`);
+  const s = await snap();
+  if (s) return s;
+  const known = Object.keys(await loadSnapshots()).filter((k) => k !== 'DEMO').join(', ');
+  throw new Error(`No live data service is reachable right now, and "${sym}" is not in the bundled snapshots (${known}). Run "python -m pricer serve" locally for any ticker.`);
 }
 
 export async function getChain(ticker, expiry) {
@@ -71,14 +78,18 @@ export async function getChain(ticker, expiry) {
 export async function getSurface(ticker) {
   const sym = norm(ticker || 'demo');
   const base = await detectApi();
+  const snap = async () => { const sn = await loadSnapshots(); const s = sn[sym] || (sym === 'DEMO' ? sn.DEMO : null); return s && s.surface ? { ...s.surface, source: 'snapshot' } : null; };
   if (base !== null) {
-    const s = await getJson(`${base}/api/surface?ticker=${encodeURIComponent(sym)}`, 90000);
-    return { ...s, source: 'live' };
+    try {
+      if (caps.surface) return { ...(await getJson(`${base}/api/surface?ticker=${encodeURIComponent(sym)}`, 90000)), source: 'live' };
+      // serverless API: it returns compact chains and the browser builds the surface (src/pricer/surface.py ported to js/surface.js)
+      const payload = await getJson(`${base}/api/chains?ticker=${encodeURIComponent(sym)}`, 60000);
+      return { ...buildSurface(payload), source: 'cboe' };
+    } catch (e) { const s = await snap(); if (s) return s; throw e; }
   }
-  const snaps = await loadSnapshots();
-  const s = snaps[sym] || (sym === 'DEMO' ? snaps.DEMO : null);
-  if (s && s.surface) return { ...s.surface, source: 'snapshot' };
-  throw new Error(`No surface snapshot for "${sym}". Available: ${Object.keys(snaps).join(', ')}. Run "python -m pricer serve" for any ticker.`);
+  const s = await snap();
+  if (s) return s;
+  throw new Error(`No live data service is reachable, and there is no bundled surface for "${sym}". Available: ${Object.keys(await loadSnapshots()).join(', ')}. Run "python -m pricer serve" for any ticker.`);
 }
 
 export const snapshotTickers = async () => Object.keys(await loadSnapshots());
