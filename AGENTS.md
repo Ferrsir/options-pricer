@@ -43,7 +43,7 @@ Pushing to `main` deploys the site (GitHub Pages, source = `main` / `docs`). A b
 ## Rules that are easy to break
 
 1. **Two engines must agree.** `docs/js/pricing.js` mirrors `src/pricer/{bsm,binomial,lsmc}.py`. Change one, change the other, then compare numbers (reference case: S=K=100, T=1, r=5%, σ=20%, q=0 → call 10.450583572, put 5.573526022, American put with 1000 steps 6.089595283). There is no Node here; check JS in a browser console via `window.__pricer.P` on a page served by `python -m pricer serve`.
-2. **Bump the cache-bust version** (`?v=N`) in `docs/index.html`, `docs/js/app.js` (imports and the `guide.html` fetch) and `docs/js/data.js` whenever you change anything under `docs/`. GitHub Pages caches for 10 minutes; without the bump visitors get a half-stale site. Current value: `v=9`.
+2. **Bump the cache-bust version** (`?v=N`) in `docs/index.html`, `docs/js/app.js` (imports and the `guide.html` fetch) and `docs/js/data.js` whenever you change anything under `docs/`. GitHub Pages caches for 10 minutes; without the bump visitors get a half-stale site. Current value: `v=10`.
 3. **`GUIDE.md` is the source of `docs/guide.html`.** Edit `GUIDE.md`, then run `python scripts/build_guide.py` and commit both. Do not hand-edit `docs/guide.html`.
 4. **`docs/data/snapshots.json` is generated** from real market data by `scripts/snapshot.py`. Never hand-edit or fabricate values. Quote figures in `GUIDE.md` that come from the reference case should be recomputed, not guessed.
 5. **Tree validity.** The CRR tree needs `d < e^{(r-q)dt} < u`, i.e. `σ > |r-q|·√dt`. Any code that searches over σ (implied vol) must start above that bound or catch the error. See `american_implied_vol` (Python) and `americanImpliedVol` (JS).
@@ -94,6 +94,12 @@ Verified: ... (say how; say what was NOT verified)
 Needs from you: ...
 Open questions: ...
 ```
+
+### 2026-09-18 · Claude → Codex (skew/term-structure hint + wording)
+Done: After walking through live examples (PLTR call, SPY put, AAPL short vs long ATM) the owner asked for the "rich vs model" banner to stop misleading beginners. `volContext()` in `app.js` adds a note under the banner when the premium's implied vol differs from your σ by 15% or more (skew explanation for out-of-the-money puts; generic strike/expiry/earnings explanation otherwise; a "cheaper than your σ" variant). A matching Guide entry was added (numbers from 2026-09-18 live runs, dated). Also replaced five stale "Yahoo Finance" strings (footer, welcome card, tooltips) with Cboe/snapshot wording. Cache-bust `v=10`.
+Verified: 31 tests pass; on a local dev server the note appears for an SPY put 5% OTM (edge -264%), for a PLTR ATM call, and when σ is set above the market's; it does not appear at fair value or for an AAPL ATM call at fair value. Computed style: solid background, text contrast about 9:1. NOT verified: a clean screenshot of the note (the in-app pane's screenshots did not track the scroll), Safari/Firefox, phones.
+Needs from you: nothing. Idea: a "vol at this strike from the surface" number in the banner instead of only pointing to the Vol surface tab.
+Open questions: none.
 
 ### 2026-09-18 · Claude → Codex (API deployed, hosted site any-ticker)
 Done: Deployed `serverless/` on Vercel (project `options-pricer-api`, https://options-pricer-api-five.vercel.app), set `DEFAULT_API`, cache-bust `v=8`, pushed (commit 60fd818). The dashboard import was done in the in-app browser with the owner signed in; the owner did the sign-in.

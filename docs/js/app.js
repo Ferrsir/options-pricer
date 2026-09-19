@@ -1,5 +1,5 @@
-import * as P from './pricing.js?v=9';
-import * as D from './data.js?v=9';
+import * as P from './pricing.js?v=10';
+import * as D from './data.js?v=10';
 
 const $ = (id) => document.getElementById(id);
 const state = { type: 'call', side: 'long', style: 'european', chain: null, chainExpiry: null, ticker: '', tab: 'overview', lsmc: null, basis: 'market', iv: NaN, surf: null };
@@ -284,7 +284,7 @@ let guideLoaded = false;
 async function loadGuide() {
   if (guideLoaded) return;
   try {
-    const r = await fetch('./guide.html?v=9'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const r = await fetch('./guide.html?v=10'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
     $('guideText').innerHTML = await r.text(); guideLoaded = true;
   } catch (e) { $('guideText').innerHTML = `<p class="hint bad">Could not load the guide (${e.message}). It is also in the repository as GUIDE.md.</p>`; }
 }
@@ -453,6 +453,16 @@ function probProfit(p, prem, sigma = p.sigma) {
   const pr = p.kind === 'call' ? P.N(d2) : P.N(-d2);
   return { be, pr: sgn() === 1 ? pr : 1 - pr };
 }
+// Why a premium can look "rich" or "cheap" against ONE flat sigma even when it is a perfectly normal market price:
+// real vol changes with strike (skew) and with expiry (events such as earnings). Shown only when the two vols differ by 15% or more.
+function volContext(p, raw, iv) {
+  if (!Number.isFinite(iv) || !(raw.sigma > 0) || Math.abs(iv - raw.sigma) / raw.sigma < 0.15) return '';
+  if (iv > raw.sigma) {
+    if (p.kind === 'put' && Math.log(p.K / p.S) < -0.03) return 'Why “rich”? Out-of-the-money puts normally trade above the at-the-money vol (this is called skew): buyers pay extra for crash protection. So a premium that looks rich against one flat σ can be a normal market price. The Vol surface tab shows the market’s vol at this strike.';
+    return 'Your σ is one flat number, but market vol changes with expiry and strike (an earnings date inside the option’s life, for example, adds to it). The Vol surface tab shows what the market charges at this strike and expiry.';
+  }
+  return 'The market charges less vol for this contract than your σ. Market vol changes with strike and expiry, so one flat σ will not fit every contract; the Vol surface tab shows the market’s vol at this strike and expiry.';
+}
 function renderBanner() {
   const box = $('premBanner'), prem = getPremium(), c = cache;
   if (!c || !Number.isFinite(prem)) { box.hidden = true; return; }
@@ -473,7 +483,8 @@ function renderBanner() {
   ];
   cells.push(['', `Greeks & charts at σ ${pct(p.sigma, 1)}`, `<button class="chip" id="toImpact2">See how they change →</button>`, p.sigma !== raw.sigma ? 'the σ your premium implies' : 'your own σ', '']);
   box.hidden = false;
-  box.innerHTML = cells.map(([cls, k, v, sub, tone]) => `<div class="cell ${cls}"><div class="k">${k}</div><div class="v ${tone}">${v}</div><div class="s">${sub}</div></div>`).join('');
+  const ctx = volContext(p, raw, iv);
+  box.innerHTML = cells.map(([cls, k, v, sub, tone]) => `<div class="cell ${cls}"><div class="k">${k}</div><div class="v ${tone}">${v}</div><div class="s">${sub}</div></div>`).join('') + (ctx ? `<div class="note" id="volContext">${ctx}</div>` : '');
   const jump = $('toImpact2'); if (jump) jump.onclick = () => setTab('impact');
 }
 
